@@ -1,0 +1,16 @@
+[project]
+name = "vimmouse"
+version = "0.1.0"
+description = "Spotlight-like UI element search and click for macOS"
+requires-python = ">=3.14"
+dependencies = [
+    "pyobjc-framework-Cocoa",
+    "pyobjc-framework-Quartz",
+    "pyobjc-framework-ApplicationServices",
+]
+
+[dependency-groups]
+dev = ["py2app"]
+
+[project.scripts]
+vimmouse = "main:main"

@@ -1,0 +1,28 @@
+name: Build VimMouse.app
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Build .app bundle
+        run: uv run python setup.py py2app
+
+      - name: Upload VimMouse.app
+        uses: actions/upload-artifact@v4
+        with:
+          name: VimMouse.app
+          path: dist/VimMouse.app
