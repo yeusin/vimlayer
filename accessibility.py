@@ -69,14 +69,20 @@ def _get_attr(element, attr):
     return None
 
 
+def _is_clickable(role, element):
+    """Check if an element can be clicked."""
+    if role in ALWAYS_CLICKABLE:
+        return True
+    actions = _get_attr(element, "AXActionNames")
+    return bool(actions and "AXPress" in actions)
+
+
 def _is_interactive(role, element):
     """Check if an element is interactive based on role and actions."""
     if role in INTERACTIVE_ROLES:
         return True
     if role in CLICKABLE_IF_PRESSABLE:
-        actions = _get_attr(element, "AXActionNames")
-        if actions and "AXPress" in actions:
-            return True
+        return _is_clickable(role, element)
     return False
 
 
@@ -99,16 +105,9 @@ def _collect_elements(element, results, depth=0, max_depth=30, parent_clickable=
             value = _get_attr(element, "AXValue")
             value_str = str(value) if value is not None else ""
             subrole = _get_attr(element, "AXSubrole") or ""
-            # For web links, also check AXDOMIdentifier and AXHelp
             help_text = _get_attr(element, "AXHelp") or ""
             label = title or desc or value_str or help_text or subrole or role or ""
-            # Determine if element is clickable
-            if role in ALWAYS_CLICKABLE:
-                clickable = True
-            else:
-                actions = _get_attr(element, "AXActionNames")
-                clickable = bool(actions and "AXPress" in actions)
-            # Skip elements with no meaningful label
+            clickable = _is_clickable(role, element)
             if label and label not in ("AXGroup", "AXStaticText", "AXImage"):
                 results.append(
                     {
@@ -125,16 +124,14 @@ def _collect_elements(element, results, depth=0, max_depth=30, parent_clickable=
                     }
                 )
 
-    # Determine if this element is clickable for child filtering
-    is_clickable = role in ALWAYS_CLICKABLE
-    if not is_clickable:
-        actions = _get_attr(element, "AXActionNames")
-        is_clickable = bool(actions and "AXPress" in actions)
-
+    clickable = _is_clickable(role, element) if role else False
     children = _get_attr(element, "AXChildren")
     if children:
         for child in children:
-            _collect_elements(child, results, depth + 1, max_depth, parent_clickable=is_clickable or parent_clickable)
+            _collect_elements(
+                child, results, depth + 1, max_depth,
+                parent_clickable=clickable or parent_clickable,
+            )
 
 
 def get_frontmost_pid():

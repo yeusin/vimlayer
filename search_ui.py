@@ -17,8 +17,8 @@ from AppKit import (
     NSApplication,
     NSBezierPath,
     NSFloatingWindowLevel,
+    NSWorkspace,
 )
-from AppKit import NSWorkspace
 from Foundation import NSIndexSet, NSObject
 import accessibility
 import mouse

@@ -2,15 +2,42 @@
 name = "vimmouse"
 version = "0.1.0"
 description = "Spotlight-like UI element search and click for macOS"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "pyobjc-framework-Cocoa",
     "pyobjc-framework-Quartz",
     "pyobjc-framework-ApplicationServices",
+    "pyobjc>=12.1",
 ]
 
 [dependency-groups]
-dev = ["py2app"]
+dev = [
+    "py2app",
+    "setuptools",
+]
 
 [project.scripts]
 vimmouse = "main:main"
+
+[tool.py2app]
+app = ["main.py"]
+argv_emulation = false
+packages = [
+    "objc",
+    "AppKit",
+    "Foundation",
+    "Quartz",
+    "CoreFoundation",
+    "CoreText",
+    "ApplicationServices",
+    "HIServices",
+    "PyObjCTools",
+]
+
+[tool.py2app.plist]
+CFBundleName = "VimMouse"
+CFBundleIdentifier = "com.vimmouse.app"
+CFBundleVersion = "0.1.0"
+CFBundleShortVersionString = "0.1.0"
+LSUIElement = true
+NSAccessibilityUsageDescription = "VimMouse needs Accessibility access to detect UI elements and simulate clicks."

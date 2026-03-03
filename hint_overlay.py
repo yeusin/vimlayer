@@ -13,11 +13,6 @@ from AppKit import (
     NSFloatingWindowLevel,
     NSWorkspace,
 )
-from ApplicationServices import (
-    kAXValueCGPointType,
-    kAXValueCGSizeType,
-    AXValueGetValue,
-)
 from PyObjCTools import AppHelper
 import ApplicationServices as AX
 import accessibility
@@ -51,7 +46,7 @@ def _generate_hints(count):
 
 def _element_position(el):
     """Extract (x, y) from an element's AXPosition."""
-    err, pos = AXValueGetValue(el["position"], kAXValueCGPointType, None)
+    err, pos = AX.AXValueGetValue(el["position"], AX.kAXValueCGPointType, None)
     return (pos.x, pos.y)
 
 
@@ -126,9 +121,8 @@ class HintOverlay:
         self.window = HintWindow.alloc().initWithOverlay_(self)
         self._populate(elements)
 
-        # Temporarily become a Regular app so we can steal focus from input fields
         app = NSApplication.sharedApplication()
-        app.setActivationPolicy_(1)  # NSApplicationActivationPolicyAccessory
+        app.setActivationPolicy_(1)  # Accessory — enables key window
         self.window.makeKeyAndOrderFront_(None)
         app.activateIgnoringOtherApps_(True)
 
@@ -139,11 +133,11 @@ class HintOverlay:
         if err != 0 or focused is None:
             return
         err, pos = AX.AXUIElementCopyAttributeValue(focused, "AXPosition", None)
-        err2, size = AX.AXUIElementCopyAttributeValue(focused, "AXSize", None)
+        _, size = AX.AXUIElementCopyAttributeValue(focused, "AXSize", None)
         if pos is None or size is None:
             return
-        _, p = AXValueGetValue(pos, kAXValueCGPointType, None)
-        _, s = AXValueGetValue(size, kAXValueCGSizeType, None)
+        _, p = AX.AXValueGetValue(pos, AX.kAXValueCGPointType, None)
+        _, s = AX.AXValueGetValue(size, AX.kAXValueCGSizeType, None)
         mouse.move_cursor(p.x + s.width / 2, p.y + s.height / 2)
 
     def _populate(self, elements):
@@ -226,8 +220,7 @@ class HintOverlay:
             self.window = None
         self.labels = []
         self.typed = ""
-        # Restore accessory policy (hide from Dock)
-        NSApplication.sharedApplication().setActivationPolicy_(2)
+        NSApplication.sharedApplication().setActivationPolicy_(2)  # Prohibited
         if self._prev_app:
             self._prev_app.activateWithOptions_(0)
             self._prev_app = None

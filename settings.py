@@ -121,6 +121,11 @@ class SettingsController(NSObject):
 
     def showWindow(self):
         if self._window is not None:
+            keycode, flags = hotkey.get_hotkey()
+            self._recorder.setStringValue_(_format_hotkey(keycode, flags))
+            self._recorder._keycode = None
+            self._recorder._flags = 0
+            NSApp.setActivationPolicy_(1)  # Accessory — needed for event monitors
             self._window.makeKeyAndOrderFront_(None)
             NSApp.activateIgnoringOtherApps_(True)
             return
@@ -167,6 +172,7 @@ class SettingsController(NSObject):
         content.addSubview_(cancel_btn)
 
         self._window = w
+        NSApp.setActivationPolicy_(1)  # Accessory — needed for event monitors
         w.makeKeyAndOrderFront_(None)
         NSApp.activateIgnoringOtherApps_(True)
 
@@ -177,9 +183,11 @@ class SettingsController(NSObject):
         if rec._keycode is not None:
             hotkey.update_hotkey(rec._keycode, rec._flags)
             config.save({"keycode": rec._keycode, "flags": rec._flags})
-        self._window.close()
+        self._window.orderOut_(None)
+        NSApp.setActivationPolicy_(2)  # Restore to Prohibited
 
     @objc.typedSelector(b"v@:@")
     def cancel_(self, sender):
         self._recorder._stopRecording()
-        self._window.close()
+        self._window.orderOut_(None)
+        NSApp.setActivationPolicy_(2)  # Restore to Prohibited

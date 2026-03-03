@@ -61,8 +61,8 @@ class StatusBarController(NSObject):
 
 def main():
     app = NSApplication.sharedApplication()
-    # Accessory mode: status bar icon, no Dock icon
-    app.setActivationPolicy_(2)  # NSApplicationActivationPolicyAccessory = 2
+    # No Dock icon, no app switcher entry
+    app.setActivationPolicy_(2)  # NSApplicationActivationPolicyProhibited
 
     overlay = hint_overlay.HintOverlay()
 
