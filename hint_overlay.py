@@ -1,5 +1,6 @@
 """Vimium-style hint overlay for clicking UI elements."""
 
+import os
 import objc
 from AppKit import (
     NSScreen,
@@ -26,6 +27,19 @@ HINT_PADDING = 2
 
 
 _HINT_CHARS = "ABCDEFGHILMNOPQRSTUVWXYZ"  # excludes J, K (used for scrolling)
+
+# macOS hardware key codes → Latin letters (input-source-independent)
+_KEYCODE_TO_CHAR = {
+    0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x",
+    8: "c", 9: "v", 11: "b", 12: "q", 13: "w", 14: "e", 15: "r",
+    16: "y", 17: "t", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6",
+    23: "5", 24: "=", 25: "9", 26: "7", 27: "-", 28: "8", 29: "0",
+    30: "]", 31: "o", 32: "u", 33: "[", 34: "i", 35: "p", 37: "l",
+    38: "j", 40: "k", 41: ";", 42: "'", 43: ",", 44: "/", 45: "n",
+    46: "m", 47: ".",
+}
+_KEY_ESCAPE = 53
+_KEY_BACKSPACE = 51
 
 
 def _generate_hints(count):
@@ -79,20 +93,17 @@ class HintWindow(NSWindow):
         self.overlay.dismiss()
 
     def keyDown_(self, event):
-        chars = event.charactersIgnoringModifiers()
-        if not chars:
-            return
-        char = chars[0]
-        if char == "\x1b":  # Escape
+        code = event.keyCode()
+        if code == _KEY_ESCAPE:
             self.overlay.dismiss()
-        elif char == "\x7f":  # Backspace
+        elif code == _KEY_BACKSPACE:
             self.overlay.backspace()
-        elif char == "j":
+        elif code == 38:  # j
             self.overlay.scroll(-3)
-        elif char == "k":
+        elif code == 40:  # k
             self.overlay.scroll(3)
-        elif char.isalpha():
-            self.overlay.type_char(char.upper())
+        elif code in _KEYCODE_TO_CHAR and _KEYCODE_TO_CHAR[code].isalpha():
+            self.overlay.type_char(_KEYCODE_TO_CHAR[code].upper())
 
 
 class HintOverlay:
@@ -107,7 +118,12 @@ class HintOverlay:
 
     def show(self):
         """Show hint overlay on clickable elements of the frontmost app."""
-        self._prev_app = NSWorkspace.sharedWorkspace().frontmostApplication()
+        my_pid = os.getpid()
+        front = NSWorkspace.sharedWorkspace().frontmostApplication()
+        if front.processIdentifier() == my_pid:
+            # Already showing hints on ourselves — skip
+            return
+        self._prev_app = front
         self._pid = self._prev_app.processIdentifier()
         elements = accessibility.get_clickable_elements(self._pid)
 
