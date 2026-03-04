@@ -43,18 +43,17 @@ _KEY_BACKSPACE = 51
 
 
 def _generate_hints(count):
-    """Generate hint strings from available chars, then two-letter combos."""
+    """Generate hint strings. Uses single letters when they suffice, otherwise all two-letter."""
     chars = _HINT_CHARS
     if count <= len(chars):
         return list(chars[:count])
-    hints = list(chars)
+    # All two-letter to avoid prefix conflicts (e.g. "A" matching "AA", "AB", …)
+    hints = []
     for first in chars:
-        if len(hints) >= count:
-            break
         for second in chars:
-            if len(hints) >= count:
-                break
             hints.append(first + second)
+            if len(hints) >= count:
+                return hints
     return hints
 
 

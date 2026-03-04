@@ -111,58 +111,61 @@ def _child_text(element, max_depth=3):
     return " ".join(p for p in parts if p)
 
 
-def _collect_elements(element, results, parent_clickable=False):
-    """Recursively collect interactive elements from the AX tree."""
+def _collect_elements(root, results, parent_clickable=False):
+    """Iteratively collect interactive elements from the AX tree."""
+    # Use an explicit stack to avoid hitting Python's recursion limit on deep
+    # web-content trees.
+    stack = [(root, parent_clickable)]
+    while stack:
+        element, par_click = stack.pop()
+        role = _get_attr(element, "AXRole")
+        # Skip static text / images that are children of a clickable element (they're just labels)
+        if par_click and role in ("AXStaticText", "AXImage"):
+            continue
 
-    role = _get_attr(element, "AXRole")
-    # Skip static text / images that are children of a clickable element (they're just labels)
-    if parent_clickable and role in ("AXStaticText", "AXImage"):
-        return
+        if _is_interactive(role, element):
+            position = _get_attr(element, "AXPosition")
+            size = _get_attr(element, "AXSize")
+            if position is not None and size is not None:
+                title = _get_attr(element, "AXTitle") or ""
+                desc = _get_attr(element, "AXDescription") or ""
+                value = _get_attr(element, "AXValue")
+                value_str = str(value) if value is not None else ""
+                subrole = _get_attr(element, "AXSubrole") or ""
+                help_text = _get_attr(element, "AXHelp") or ""
+                label = title or desc or value_str or help_text or subrole or ""
+                clickable = _is_clickable(role, element)
+                # For clickable elements with no label, try to get text from children
+                if not label and clickable:
+                    label = _child_text(element)
+                # Exclude non-clickable elements with only a generic role as label
+                if not label and not clickable:
+                    pass  # skip — no useful label and not clickable
+                elif label or clickable:
+                    if not label:
+                        label = role or "?"
+                    results.append(
+                        {
+                            "element": element,
+                            "role": role or "",
+                            "subrole": subrole,
+                            "title": title,
+                            "description": desc,
+                            "value": value_str,
+                            "label": label,
+                            "position": position,
+                            "size": size,
+                            "clickable": clickable,
+                        }
+                    )
 
-    if _is_interactive(role, element):
-        position = _get_attr(element, "AXPosition")
-        size = _get_attr(element, "AXSize")
-        if position is not None and size is not None:
-            title = _get_attr(element, "AXTitle") or ""
-            desc = _get_attr(element, "AXDescription") or ""
-            value = _get_attr(element, "AXValue")
-            value_str = str(value) if value is not None else ""
-            subrole = _get_attr(element, "AXSubrole") or ""
-            help_text = _get_attr(element, "AXHelp") or ""
-            label = title or desc or value_str or help_text or subrole or ""
-            clickable = _is_clickable(role, element)
-            # For clickable elements with no label, try to get text from children
-            if not label and clickable:
-                label = _child_text(element)
-            # Exclude non-clickable elements with only a generic role as label
-            if not label and not clickable:
-                pass  # skip — no useful label and not clickable
-            elif label or clickable:
-                if not label:
-                    label = role or "?"
-                results.append(
-                    {
-                        "element": element,
-                        "role": role or "",
-                        "subrole": subrole,
-                        "title": title,
-                        "description": desc,
-                        "value": value_str,
-                        "label": label,
-                        "position": position,
-                        "size": size,
-                        "clickable": clickable,
-                    }
-                )
-
-    clickable = _is_clickable(role, element) if role else False
-    children = _get_attr(element, "AXChildren")
-    if children:
-        for child in children:
-            _collect_elements(
-                child, results,
-                parent_clickable=clickable or parent_clickable,
-            )
+        clickable = _is_clickable(role, element) if role else False
+        children = _get_attr(element, "AXChildren")
+        if children:
+            child_click = clickable or par_click
+            # Reverse so we process children in original order (stack is LIFO)
+            for child in reversed(children):
+                stack.append((child, child_click))
 
 
 def get_frontmost_pid():
@@ -179,14 +182,40 @@ def get_elements(pid):
     return results
 
 
-def get_window_bounds(pid):
-    """Return (x, y, w, h) of the focused window for the given PID, or None."""
+def _find_scroll_area(element, depth=0):
+    """Find the first AXScrollArea inside a window (the visible content viewport)."""
+    if depth > 5:
+        return None
+    children = _get_attr(element, "AXChildren")
+    if not children:
+        return None
+    for child in children:
+        role = _get_attr(child, "AXRole")
+        if role == "AXScrollArea":
+            return child
+        found = _find_scroll_area(child, depth + 1)
+        if found:
+            return found
+    return None
+
+
+def _get_visible_bounds(pid):
+    """Return (x, y, w, h) of the visible content area for the given PID.
+
+    Tries the focused window's main scroll area first (captures the actual
+    viewport inside a browser).  Falls back to the window frame.
+    """
     app_ref = AX.AXUIElementCreateApplication(pid)
     focused = _get_attr(app_ref, "AXFocusedWindow")
     if focused is None:
         return None
-    pos = _get_attr(focused, "AXPosition")
-    size = _get_attr(focused, "AXSize")
+
+    # Try to find the content scroll area for a tighter clip rect
+    scroll = _find_scroll_area(focused)
+    target = scroll if scroll is not None else focused
+
+    pos = _get_attr(target, "AXPosition")
+    size = _get_attr(target, "AXSize")
     if pos is None or size is None:
         return None
     _, p = AX.AXValueGetValue(pos, AX.kAXValueCGPointType, None)
@@ -194,18 +223,80 @@ def get_window_bounds(pid):
     return (p.x, p.y, s.width, s.height)
 
 
+def _collect_clickable(root):
+    """Fast collection: only gather clickable element refs with position/size."""
+    results = []
+    stack = [root]
+    while stack:
+        element = stack.pop()
+        role = _get_attr(element, "AXRole")
+        if role and _is_clickable(role, element):
+            position = _get_attr(element, "AXPosition")
+            size = _get_attr(element, "AXSize")
+            if position is not None and size is not None:
+                results.append({"element": element, "role": role,
+                                "position": position, "size": size})
+        children = _get_attr(element, "AXChildren")
+        if children:
+            stack.extend(children)
+    return results
+
+
+def _enrich_element(el):
+    """Fetch full label info for a verified visible element."""
+    element = el["element"]
+    role = el["role"]
+    title = _get_attr(element, "AXTitle") or ""
+    desc = _get_attr(element, "AXDescription") or ""
+    value = _get_attr(element, "AXValue")
+    value_str = str(value) if value is not None else ""
+    subrole = _get_attr(element, "AXSubrole") or ""
+    help_text = _get_attr(element, "AXHelp") or ""
+    label = title or desc or value_str or help_text or subrole or ""
+    if not label:
+        label = _child_text(element)
+    if not label:
+        label = role or "?"
+    el.update({"subrole": subrole, "title": title, "description": desc,
+               "value": value_str, "label": label, "clickable": True})
+    return el
+
+
 def get_clickable_elements(pid):
-    """Get only clickable elements visible within the focused window."""
-    elements = [el for el in get_elements(pid) if el.get("clickable")]
-    bounds = get_window_bounds(pid)
+    """Get only clickable elements actually visible on screen."""
+    app_ref = AX.AXUIElementCreateApplication(pid)
+    candidates = _collect_clickable(app_ref)
+
+    bounds = _get_visible_bounds(pid)
     if bounds is None:
-        return elements
-    wx, wy, ww, wh = bounds
+        return [_enrich_element(el) for el in candidates]
+    bx, by, bw, bh = bounds
+
     visible = []
-    for el in elements:
+    for el in candidates:
         _, pos = AX.AXValueGetValue(el["position"], AX.kAXValueCGPointType, None)
-        if wx <= pos.x < wx + ww and wy <= pos.y < wy + wh:
-            visible.append(el)
+        _, sz = AX.AXValueGetValue(el["size"], AX.kAXValueCGSizeType, None)
+        if sz.width < 1 or sz.height < 1:
+            continue
+        if not (pos.x + sz.width > bx and pos.x < bx + bw
+                and pos.y + sz.height > by and pos.y < by + bh):
+            continue
+        # Hit-test at element center to verify it's actually on screen
+        cx = pos.x + sz.width / 2
+        cy = pos.y + sz.height / 2
+        err, hit = AX.AXUIElementCopyElementAtPosition(app_ref, cx, cy, None)
+        if err != 0 or hit is None:
+            continue
+        # Walk up from hit to see if it's our element (or a child of it)
+        current = hit
+        for _ in range(10):
+            if current is None:
+                break
+            if current == el["element"]:
+                visible.append(_enrich_element(el))
+                break
+            current = _get_attr(current, "AXParent")
+
     return visible
 
 
