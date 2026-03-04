@@ -250,7 +250,7 @@ def get_clickable_elements(pid):
     visible = []
     for el in candidates:
         ex, ey, ew, eh = _element_rect(el["position"], el["size"])
-        if ew < 1 or eh < 1:
+        if ew < 10 or eh < 10:
             continue
         if not (ex + ew > bx and ex < bx + bw
                 and ey + eh > by and ey < by + bh):

@@ -117,7 +117,8 @@ def _add_watermark(container, screen_size, mode_text):
     mode = _make_label(mode_text, _WM_MODE_FONT_SIZE, None, _WM_MODE_COLOR, draw_bg=False, bold=False)
     mode.setAlignment_(1)  # center
     mode_f = mode.frame()
-    mode.setFrameOrigin_((cx - mode_f.size.width / 2, cy - mode_f.size.height - 4))
+    mode.setFrame_(NSMakeRect(0, 0, mode_f.size.width + 4, mode_f.size.height))
+    mode.setFrameOrigin_((cx - (mode_f.size.width + 4) / 2, cy - mode_f.size.height - 4))
 
     container.addSubview_(vm)
     container.addSubview_(mode)
@@ -155,9 +156,11 @@ class HintWindow(NSWindow):
         self._mode_label.setStringValue_(text)
         self._mode_label.sizeToFit()
         f = self._mode_label.frame()
+        w = f.size.width + 4
+        self._mode_label.setFrame_(NSMakeRect(0, 0, w, f.size.height))
         vm_f = self._vm_label.frame()
         cx = self._screen_size.width / 2
-        self._mode_label.setFrameOrigin_((cx - f.size.width / 2,
+        self._mode_label.setFrameOrigin_((cx - w / 2,
                                            vm_f.origin.y - f.size.height - 4))
 
     def canBecomeKeyWindow(self):
@@ -284,6 +287,7 @@ class HintOverlay:
         self._center_cursor_on_app()
         self.window = HintWindow.alloc().initWithOverlay_(self)
         self._populate(elements)
+        self._hide_all_labels()
         self._activate_overlay_window()
         self._start_watching_focus()
         self._notify_mode("N")
@@ -452,7 +456,7 @@ class HintOverlay:
             content.addSubview_(label)
             self.labels.append((hint, label, w, "window"))
 
-        elements.sort(key=lambda el: _element_position(el))
+        elements.sort(key=lambda el: (_element_position(el)[1], _element_position(el)[0]))
         for hint, el in zip(el_hints, elements):
             x, y = _element_position(el)
             flipped_y = screen.size.height - y
@@ -600,12 +604,16 @@ class HintOverlay:
         self._hints_visible = True
 
     def toggle_hints(self):
-        """Show hints temporarily for 2 seconds."""
-        log.info("toggle_hints")
-        self.refresh()
-        self._hints_gen += 1
-        gen = self._hints_gen
-        AppHelper.callLater(2.0, lambda: self._auto_hide_hints(gen))
+        """Show hints for 2 seconds, or dismiss if already visible."""
+        log.info("toggle_hints visible=%s", self._hints_visible)
+        if self._hints_visible:
+            self._hide_all_labels()
+            self._hints_visible = False
+        else:
+            self.refresh()
+            self._hints_gen += 1
+            gen = self._hints_gen
+            AppHelper.callLater(2.0, lambda: self._auto_hide_hints(gen))
 
     def _auto_hide_hints(self, gen):
         """Hide hints if no new toggle happened since gen."""
