@@ -154,6 +154,7 @@ class HintOverlay:
         self._scroll_gen = 0
         self._scroll_pending = False
         self._ws_observer = None
+        self._clicking = False
 
     def show(self):
         """Show hint overlay on clickable elements of the frontmost app."""
@@ -216,7 +217,7 @@ class HintOverlay:
 
     def _on_app_activated(self, note):
         """Called when any app gains focus. Refresh hints for the newly focused app."""
-        if not self.window:
+        if not self.window or self._clicking:
             return
         activated = note.userInfo()["NSWorkspaceApplicationKey"]
         activated_pid = activated.processIdentifier()
@@ -318,10 +319,12 @@ class HintOverlay:
     def click_at_cursor(self):
         """Click at the current cursor position, then refresh hints."""
         x, y = mouse.get_cursor_position()
+        print(f"[space click] ({x:.0f}, {y:.0f})")
         self._click_and_refresh(x, y)
 
     def _click_and_refresh(self, x, y):
         """Hide hints, click at (x, y) in the target app, then refresh hints."""
+        self._clicking = True
         for _, label, _ in self.labels:
             label.setHidden_(True)
         # Give focus to target app so click lands correctly
@@ -333,13 +336,21 @@ class HintOverlay:
         """Execute the click and refresh hints afterward."""
         if not self.window:
             return
+        # Hide overlay so the click lands on the target app
+        self.window.orderOut_(None)
         mouse.click(x, y)
         AppHelper.callLater(0.3, self._reclaim_and_refresh)
 
     def _reclaim_and_refresh(self):
         """Reclaim key window and refresh hints after a click."""
+        self._clicking = False
         if not self.window:
             return
+        # Update target to whichever app is now frontmost
+        front = NSWorkspace.sharedWorkspace().frontmostApplication()
+        if front.processIdentifier() != os.getpid():
+            self._prev_app = front
+            self._pid = front.processIdentifier()
         self.refresh()
         app = NSApplication.sharedApplication()
         app.setActivationPolicy_(1)
@@ -379,6 +390,7 @@ class HintOverlay:
         if len(matching) == 1:
             hint, label, el = matching[0]
             cx, cy = mouse.element_center(el["position"], el["size"])
+            print(f"[hint {hint}] role={el['role']} title={el.get('title', '')!r} desc={el.get('description', '')!r} ({cx:.0f}, {cy:.0f})")
             self._click_and_refresh(cx, cy)
         elif len(matching) == 0:
             # No match — reset typed filter and re-show all hints
