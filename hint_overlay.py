@@ -42,7 +42,7 @@ _WM_MODE_COLOR = (0.5, 0.25)
 _WM_MODE_FONT_SIZE = 16
 
 
-_HINT_CHARS = "ABCDEFGIMNOPQRSTUVWXYZ"  # excludes H, J, K, L (used for movement)
+_HINT_CHARS = "ABCDEFGMNOPQRSTUVWXYZ"  # excludes H, J, K, L (movement) and I (insert mode)
 
 # macOS hardware key codes → Latin letters (input-source-independent)
 _KEYCODE_TO_CHAR = {
@@ -602,7 +602,8 @@ class HintOverlay:
         self._hide_insert_watermark()
         self.window._set_mode("NORMAL")
         self._activate_overlay_window()
-        self.refresh()
+        if self._hints_visible:
+            self.refresh()
 
     def _show_insert_watermark(self):
         """Show a passive floating watermark for INSERT mode."""
