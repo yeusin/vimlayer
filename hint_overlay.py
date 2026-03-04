@@ -57,9 +57,10 @@ _KEY_B = 11
 _KEY_F = 3
 _KEY_SLASH = 44
 _KEY_SPACE = 49
-_KEY_TAB = 48
 _KEY_I = 34
-_MOUSE_STEP = 20
+_MOUSE_STEP_MIN = 6
+_MOUSE_STEP_MAX = 60
+_MOUSE_ACCEL = 1.2  # multiplier per repeated move
 _CTRL_FLAG = 1 << 18  # NSEventModifierFlagControl
 
 
@@ -156,30 +157,26 @@ class HintWindow(NSWindow):
         code = event.keyCode()
         flags = event.modifierFlags()
         ctrl = flags & _CTRL_FLAG
-        if code == _KEY_ESCAPE:
-            self.overlay.dismiss()
-        elif code == _KEY_BACKSPACE:
+        if code == _KEY_BACKSPACE:
             self.overlay.backspace()
         elif ctrl and code == _KEY_B:
             self.overlay.scroll(3)
         elif ctrl and code == _KEY_F:
             self.overlay.scroll(-3)
         elif code == _KEY_H:
-            self.overlay.move_mouse(-_MOUSE_STEP, 0)
+            self.overlay.move_mouse(-1, 0, event.isARepeat())
         elif code == _KEY_J:
-            self.overlay.move_mouse(0, _MOUSE_STEP)
+            self.overlay.move_mouse(0, 1, event.isARepeat())
         elif code == _KEY_K:
-            self.overlay.move_mouse(0, -_MOUSE_STEP)
+            self.overlay.move_mouse(0, -1, event.isARepeat())
         elif code == _KEY_L:
-            self.overlay.move_mouse(_MOUSE_STEP, 0)
+            self.overlay.move_mouse(1, 0, event.isARepeat())
         elif code == _KEY_SPACE:
             self.overlay.click_at_cursor()
-        elif code == _KEY_TAB:
-            self.overlay.toggle_window_hints()
         elif code == _KEY_I:
             self.overlay.enter_insert_mode()
         elif code == _KEY_SLASH:
-            self.overlay.refresh()
+            self.overlay.toggle_hints()
         elif code in _KEYCODE_TO_CHAR and _KEYCODE_TO_CHAR[code].isalpha():
             self.overlay.type_char(_KEYCODE_TO_CHAR[code].upper())
 
@@ -195,7 +192,10 @@ class HintOverlay:
         self._scroll_pending = False
         self._ws_observer = None
         self._clicking = False
-        self._window_mode = False
+        self._hints_visible = True
+        self._win_hint_cache = {}  # kCGWindowNumber -> hint char
+        self._mouse_dir = None  # (dx_sign, dy_sign) of last move
+        self._mouse_speed = _MOUSE_STEP_MIN
         self._insert_mode = False
         self._insert_tap = None
         self._insert_source = None
@@ -206,6 +206,13 @@ class HintOverlay:
         app.setActivationPolicy_(1)  # Accessory — enables key window
         self.window.makeKeyAndOrderFront_(None)
         app.activateIgnoringOtherApps_(True)
+
+    def toggle(self):
+        """Toggle the overlay on/off."""
+        if self.window:
+            self.dismiss()
+        else:
+            self.show()
 
     def show(self):
         """Show hint overlay on clickable elements of the frontmost app."""
@@ -272,35 +279,106 @@ class HintOverlay:
         if activated_pid == os.getpid():
             return
         # Clear old hints immediately
-        for _, label, _ in self.labels:
+        for _, label, *_ in self.labels:
             label.setHidden_(True)
         # Switch target to the newly focused app
         self._prev_app = activated
         self._pid = activated_pid
-        elements = accessibility.get_clickable_elements(self._pid)
-        if elements:
-            self._populate(elements)
+        if self._hints_visible:
+            elements = accessibility.get_clickable_elements(self._pid)
+            if elements:
+                self._populate(elements)
         self._activate_overlay_window()
 
+    def _get_visible_windows(self):
+        """Get visible windows from other apps."""
+        import Quartz
+        my_pid = os.getpid()
+        win_list = Quartz.CGWindowListCopyWindowInfo(
+            Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
+            Quartz.kCGNullWindowID,
+        )
+        windows = []
+        for w in win_list:
+            pid = w.get(Quartz.kCGWindowOwnerPID, 0)
+            if pid == my_pid:
+                continue
+            if w.get(Quartz.kCGWindowLayer, -1) != 0:
+                continue
+            bounds = w.get(Quartz.kCGWindowBounds, {})
+            if bounds.get("Width", 0) == 0 or bounds.get("Height", 0) == 0:
+                continue
+            windows.append(w)
+        return windows
+
     def _populate(self, elements):
-        """Place hint labels on the overlay for the given elements."""
+        """Place hint labels on the overlay for elements and visible windows."""
         # Clear existing labels
-        for _, label, _ in self.labels:
-            label.removeFromSuperview()
+        for item in self.labels:
+            item[1].removeFromSuperview()
         self.labels = []
         self.typed = ""
 
-        elements.sort(key=lambda el: _element_position(el))
-        hints = _generate_hints(len(elements))
+        windows = self._get_visible_windows()
+        import Quartz
+
+        # Reuse cached hints for known windows, assign new ones for new windows
+        chars = _HINT_CHARS
+        used_hints = set()
+        win_assignments = []
+        for w in windows:
+            wid = w.get(Quartz.kCGWindowNumber, 0)
+            cached = self._win_hint_cache.get(wid)
+            if cached and cached not in used_hints:
+                used_hints.add(cached)
+                win_assignments.append((cached, w))
+            else:
+                win_assignments.append((None, w))
+        available = [c for c in chars if c not in used_hints]
+        avail_idx = 0
+        new_cache = {}
+        for i, (hint, w) in enumerate(win_assignments):
+            if hint is None and avail_idx < len(available):
+                hint = available[avail_idx]
+                avail_idx += 1
+                win_assignments[i] = (hint, w)
+            if hint:
+                new_cache[w.get(Quartz.kCGWindowNumber, 0)] = hint
+        self._win_hint_cache = new_cache
+
+        # Element hints use two-letter combos from chars not used by windows
+        all_used = set(h for h, _ in win_assignments if h)
+        remaining = [c for c in chars if c not in all_used]
+        el_hints = []
+        for first in remaining:
+            for second in chars:
+                el_hints.append(first + second)
+                if len(el_hints) >= len(elements):
+                    break
+            if len(el_hints) >= len(elements):
+                break
+
         screen = NSScreen.mainScreen().frame()
         content = self.window.contentView()
 
-        for hint, el in zip(hints, elements):
+        for hint, w in win_assignments:
+            if not hint:
+                continue
+            bounds = w[Quartz.kCGWindowBounds]
+            cx = bounds["X"] + bounds["Width"] / 2
+            cy = bounds["Y"] + bounds["Height"] / 2
+            flipped_y = screen.size.height - cy
+            label = self._create_window_hint_label(hint, cx, flipped_y)
+            content.addSubview_(label)
+            self.labels.append((hint, label, w, "window"))
+
+        elements.sort(key=lambda el: _element_position(el))
+        for hint, el in zip(el_hints, elements):
             x, y = _element_position(el)
             flipped_y = screen.size.height - y
             label = self._create_hint_label(hint, x, flipped_y)
             content.addSubview_(label)
-            self.labels.append((hint, label, el))
+            self.labels.append((hint, label, el, "element"))
 
     def _create_hint_label(self, hint_text, x, flipped_y):
         """Create a styled hint label at the given screen position."""
@@ -358,17 +436,24 @@ class HintOverlay:
         label.layer().setCornerRadius_(WIN_HINT_CORNER_RADIUS)
         return label
 
-    def move_mouse(self, dx, dy):
-        """Move the mouse cursor by (dx, dy) pixels."""
+    def move_mouse(self, dx, dy, repeat=False):
+        """Move the mouse cursor with acceleration on repeated presses."""
+        direction = (dx, dy)
+        if repeat and self._mouse_dir == direction:
+            self._mouse_speed = min(self._mouse_speed * _MOUSE_ACCEL, _MOUSE_STEP_MAX)
+        else:
+            self._mouse_speed = _MOUSE_STEP_MIN
+        self._mouse_dir = direction
+        step = int(self._mouse_speed)
         x, y = mouse.get_cursor_position()
-        mouse.move_cursor(x + dx, y + dy)
+        mouse.move_cursor(x + dx * step, y + dy * step)
 
     def scroll(self, lines):
         """Scroll the target app. Hints hide during scrolling, refresh when idle."""
         mouse.scroll(lines)
         # Hide hints on first scroll
         if not self._scroll_pending:
-            for _, label, _ in self.labels:
+            for _, label, *_ in self.labels:
                 label.setHidden_(True)
         # Bump the generation so earlier scheduled refreshes become no-ops
         self._scroll_gen += 1
@@ -381,8 +466,9 @@ class HintOverlay:
         if gen != self._scroll_gen or not self.window:
             return
         self._scroll_pending = False
-        elements = accessibility.get_clickable_elements(self._pid)
-        self._populate(elements)
+        if self._hints_visible:
+            elements = accessibility.get_clickable_elements(self._pid)
+            self._populate(elements)
 
     def click_at_cursor(self):
         """Click at the current cursor position, then refresh hints."""
@@ -393,7 +479,7 @@ class HintOverlay:
     def _click_and_refresh(self, x, y):
         """Hide hints, click at (x, y) in the target app, then refresh hints."""
         self._clicking = True
-        for _, label, _ in self.labels:
+        for _, label, *_ in self.labels:
             label.setHidden_(True)
         # Give focus to target app so click lands correctly
         if self._prev_app:
@@ -421,13 +507,24 @@ class HintOverlay:
             self._prev_app = front
             self._pid = front.processIdentifier()
         self._activate_overlay_window()
-        self.refresh()
+        if self._hints_visible:
+            self.refresh()
 
     def refresh(self):
         """Re-collect elements and refresh hints."""
         elements = accessibility.get_clickable_elements(self._pid)
         if elements:
             self._populate(elements)
+        self._hints_visible = True
+
+    def toggle_hints(self):
+        """Toggle hint labels on/off. Recalculates when showing."""
+        if self._hints_visible:
+            for _, label, *_ in self.labels:
+                label.setHidden_(True)
+            self._hints_visible = False
+        else:
+            self.refresh()
 
     def enter_insert_mode(self):
         """Enter insert mode: pass all keys to the target app until Escape."""
@@ -560,67 +657,8 @@ class HintOverlay:
             self._insert_window.orderOut_(None)
             self._insert_window = None
 
-    def toggle_window_hints(self):
-        """Toggle between element hints and window-switching hints."""
-        if self._window_mode:
-            self._window_mode = False
-            self.refresh()
-        else:
-            self._window_mode = True
-            self._show_window_hints()
-
-    def _show_window_hints(self):
-        """Show single-char hints on visible windows for switching."""
-        import Quartz
-
-        my_pid = os.getpid()
-        win_list = Quartz.CGWindowListCopyWindowInfo(
-            Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
-            Quartz.kCGNullWindowID,
-        )
-
-        windows = []
-        for w in win_list:
-            pid = w.get(Quartz.kCGWindowOwnerPID, 0)
-            if pid == my_pid:
-                continue
-            layer = w.get(Quartz.kCGWindowLayer, -1)
-            if layer != 0:
-                continue
-            bounds = w.get(Quartz.kCGWindowBounds, {})
-            width = bounds.get("Width", 0)
-            height = bounds.get("Height", 0)
-            if width == 0 or height == 0:
-                continue
-            windows.append(w)
-
-        print(f"[window hints] found {len(windows)} windows")
-        if not windows:
-            return
-
-        # Clear existing labels
-        for _, label, _ in self.labels:
-            label.removeFromSuperview()
-        self.labels = []
-        self.typed = ""
-
-        screen = NSScreen.mainScreen().frame()
-        content = self.window.contentView()
-        hints = _generate_hints(len(windows))
-
-        for hint, w in zip(hints, windows):
-            bounds = w[Quartz.kCGWindowBounds]
-            cx = bounds["X"] + bounds["Width"] / 2
-            cy = bounds["Y"] + bounds["Height"] / 2
-            flipped_y = screen.size.height - cy
-            owner = w.get(Quartz.kCGWindowOwnerName, "?")
-            print(f"[window hint {hint}] {owner} at ({cx:.0f}, {cy:.0f}) flipped_y={flipped_y:.0f}")
-            label = self._create_window_hint_label(hint, cx, flipped_y)
-            content.addSubview_(label)
-            self.labels.append((hint, label, w))
-
     def _switch_to_window(self, win_info):
-        """Activate the app owning the given window and show its element hints."""
+        """Activate the app owning the given window and raise it."""
         import Quartz
         bounds = win_info[Quartz.kCGWindowBounds]
         cx = bounds["X"] + bounds["Width"] / 2
@@ -632,8 +670,28 @@ class HintOverlay:
             app.activateWithOptions_(0)
             self._prev_app = app
             self._pid = pid
-        self._window_mode = False
+        # Raise the specific window via AX
+        self._raise_window(pid, bounds)
         AppHelper.callLater(0.15, self._activate_and_refresh)
+
+    def _raise_window(self, pid, bounds):
+        """Raise a specific window by matching its position/size via Accessibility."""
+        app_ref = AX.AXUIElementCreateApplication(pid)
+        err, windows = AX.AXUIElementCopyAttributeValue(app_ref, "AXWindows", None)
+        if err != 0 or not windows:
+            return
+        tx, ty = bounds["X"], bounds["Y"]
+        tw, th = bounds["Width"], bounds["Height"]
+        for win in windows:
+            err, pos = AX.AXUIElementCopyAttributeValue(win, "AXPosition", None)
+            err2, size = AX.AXUIElementCopyAttributeValue(win, "AXSize", None)
+            if pos is None or size is None:
+                continue
+            _, p = AX.AXValueGetValue(pos, AX.kAXValueCGPointType, None)
+            _, s = AX.AXValueGetValue(size, AX.kAXValueCGSizeType, None)
+            if abs(p.x - tx) < 2 and abs(p.y - ty) < 2 and abs(s.width - tw) < 2 and abs(s.height - th) < 2:
+                AX.AXUIElementPerformAction(win, "AXRaise")
+                return
 
     def _activate_and_refresh(self):
         """Re-activate overlay and refresh element hints after window switch."""
@@ -653,7 +711,6 @@ class HintOverlay:
             self.window = None
         self.labels = []
         self.typed = ""
-        self._window_mode = False
         NSApplication.sharedApplication().setActivationPolicy_(2)  # Prohibited
         if self._prev_app:
             self._prev_app.activateWithOptions_(0)
@@ -663,25 +720,25 @@ class HintOverlay:
         """Handle a typed letter: filter hints, click if unique match."""
         self.typed += char
         matching = []
-        for hint, label, el in self.labels:
+        for hint, label, data, kind in self.labels:
             if hint.startswith(self.typed):
                 label.setHidden_(False)
-                matching.append((hint, label, el))
+                matching.append((hint, label, data, kind))
             else:
                 label.setHidden_(True)
 
         if len(matching) == 1:
-            hint, label, el = matching[0]
-            if self._window_mode:
-                self._switch_to_window(el)
+            hint, label, data, kind = matching[0]
+            if kind == "window":
+                self._switch_to_window(data)
             else:
-                cx, cy = mouse.element_center(el["position"], el["size"])
-                print(f"[hint {hint}] role={el['role']} title={el.get('title', '')!r} desc={el.get('description', '')!r} ({cx:.0f}, {cy:.0f})")
+                cx, cy = mouse.element_center(data["position"], data["size"])
+                print(f"[hint {hint}] role={data['role']} title={data.get('title', '')!r} desc={data.get('description', '')!r} ({cx:.0f}, {cy:.0f})")
                 self._click_and_refresh(cx, cy)
         elif len(matching) == 0:
             # No match — reset typed filter and re-show all hints
             self.typed = ""
-            for h, lbl, _ in self.labels:
+            for h, lbl, *_ in self.labels:
                 lbl.setHidden_(False)
 
     def backspace(self):
@@ -689,7 +746,7 @@ class HintOverlay:
         if not self.typed:
             return
         self.typed = self.typed[:-1]
-        for hint, label, el in self.labels:
+        for hint, label, *_ in self.labels:
             if hint.startswith(self.typed):
                 label.setHidden_(False)
             else:

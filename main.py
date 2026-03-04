@@ -96,7 +96,7 @@ def main():
 
     def on_hotkey():
         # Schedule on main thread since CGEventTap callback runs on CF runloop
-        AppHelper.callAfter(overlay.show)
+        AppHelper.callAfter(overlay.toggle)
 
     cfg = config.load()
     if not hotkey.register(on_hotkey, keycode=cfg["keycode"], flags=cfg["flags"]):
