@@ -1,5 +1,6 @@
 """VimMouse - Spotlight-like UI element search and click for macOS."""
 
+import logging
 import signal
 from AppKit import (
     NSApplication,
@@ -88,6 +89,12 @@ class StatusBarController(NSObject):
 
 
 def main():
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+        level=logging.INFO,
+    )
+
     app = NSApplication.sharedApplication()
     # No Dock icon, no app switcher entry
     app.setActivationPolicy_(2)  # NSApplicationActivationPolicyProhibited
@@ -107,7 +114,7 @@ def main():
 
     signal.signal(signal.SIGINT, lambda *_: AppHelper.stopEventLoop())
 
-    print("VimMouse running. Click 'VM' in menu bar for settings.")
+    logging.getLogger(__name__).info("VimMouse running")
     AppHelper.runEventLoop()
 
 

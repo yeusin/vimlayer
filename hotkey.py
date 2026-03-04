@@ -1,6 +1,9 @@
 """Global hotkey registration via CGEventTap."""
 
+import logging
 import Quartz
+
+log = logging.getLogger(__name__)
 
 MODIFIER_MASK = (
     Quartz.kCGEventFlagMaskCommand
@@ -47,8 +50,7 @@ class HotkeyManager:
         )
         self.tap = tap
         if tap is None:
-            print("ERROR: Could not create event tap.")
-            print("Grant Accessibility permission in System Settings → Privacy & Security.")
+            log.error("Could not create event tap. Grant Accessibility permission in System Settings → Privacy & Security.")
             return False
 
         source = Quartz.CFMachPortCreateRunLoopSource(None, tap, 0)

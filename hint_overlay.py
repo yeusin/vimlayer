@@ -1,6 +1,8 @@
 """Vimium-style hint overlay for clicking UI elements."""
 
+import logging
 import os
+import time
 import objc
 import Quartz
 from AppKit import (
@@ -20,6 +22,8 @@ from PyObjCTools import AppHelper
 import ApplicationServices as AX
 import accessibility
 import mouse
+
+log = logging.getLogger(__name__)
 
 # Hint label style
 HINT_FONT_SIZE = 12
@@ -70,6 +74,7 @@ _MOUSE_S0 = 10        # base sensitivity (pixels per step)
 _MOUSE_STEP_MAX = 100  # cap on maximum step size
 _MOUSE_RAMP_FRAMES = 30  # frames to reach max speed
 _CTRL_FLAG = 1 << 18  # NSEventModifierFlagControl
+_DOUBLE_ESC_INTERVAL = 0.3  # seconds between two Escape presses
 
 
 def _element_position(el):
@@ -167,6 +172,14 @@ class HintWindow(NSWindow):
         if cmd and not ctrl:
             self.overlay.passthrough_key(event)
             return
+        if code == _KEY_ESCAPE:
+            now = time.monotonic()
+            if now - self.overlay._last_escape_time <= _DOUBLE_ESC_INTERVAL:
+                self.overlay._last_escape_time = 0
+                self.overlay.dismiss()
+            else:
+                self.overlay._last_escape_time = now
+            return
         if code == _KEY_BACKSPACE:
             self.overlay.backspace()
         elif ctrl and code == _KEY_B:
@@ -214,6 +227,7 @@ class HintOverlay:
         self._insert_tap = None
         self._insert_source = None
         self._insert_window = None
+        self._last_escape_time = 0
 
     # -- Helpers --
 
@@ -253,10 +267,11 @@ class HintOverlay:
             return
         self._prev_app = front
         self._pid = self._prev_app.processIdentifier()
+        log.info("show: app=%s pid=%d", front.localizedName(), self._pid)
         elements = accessibility.get_clickable_elements(self._pid)
 
         if not elements:
-            print("No clickable elements found.")
+            log.info("show: no clickable elements found")
             return
 
         self._center_cursor_on_app()
@@ -267,6 +282,7 @@ class HintOverlay:
 
     def dismiss(self):
         """Dismiss the overlay without action."""
+        log.info("dismiss")
         if self._insert_mode:
             self._exit_insert_mode()
         self._hide_insert_watermark()
@@ -483,6 +499,7 @@ class HintOverlay:
 
     def scroll(self, lines):
         """Scroll the target app. Hints hide during scrolling, refresh when idle."""
+        log.info("scroll: lines=%d", lines)
         mouse.scroll(lines)
         if not self._scroll_pending:
             self._hide_all_labels()
@@ -508,6 +525,8 @@ class HintOverlay:
         if not cg_event or not self._prev_app:
             return
         # Hide overlay so target app can receive focus and process the key
+        char = _KEYCODE_TO_CHAR.get(Quartz.CGEventGetIntegerValueField(cg_event, Quartz.kCGKeyboardEventKeycode), "?")
+        log.info("passthrough: key=%s", char)
         self._clicking = True
         if self.window:
             self.window.orderOut_(None)
@@ -533,7 +552,7 @@ class HintOverlay:
     def click_at_cursor(self):
         """Click at the current cursor position, then refresh hints."""
         x, y = mouse.get_cursor_position()
-        print(f"[space click] ({x:.0f}, {y:.0f})")
+        log.info("click: cursor (%.0f, %.0f)", x, y)
         self._click_and_refresh(x, y)
 
     def _click_and_refresh(self, x, y):
@@ -573,6 +592,7 @@ class HintOverlay:
 
     def toggle_hints(self):
         """Toggle hint labels on/off. Recalculates when showing."""
+        log.info("toggle_hints: visible=%s", not self._hints_visible)
         if self._hints_visible:
             self._hide_all_labels()
             self._hints_visible = False
@@ -585,6 +605,7 @@ class HintOverlay:
         """Enter insert mode: pass all keys to the target app until Escape."""
         if self._insert_mode:
             return
+        log.info("mode: INSERT")
         self._insert_mode = True
 
         if self.window:
@@ -621,12 +642,18 @@ class HintOverlay:
         if event_type == Quartz.kCGEventKeyDown:
             keycode = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
             if keycode == _KEY_ESCAPE:
-                AppHelper.callAfter(self._exit_insert_mode)
-                return None
+                now = time.monotonic()
+                if now - self._last_escape_time <= _DOUBLE_ESC_INTERVAL:
+                    self._last_escape_time = 0
+                    AppHelper.callAfter(self._exit_insert_mode)
+                    return None  # suppress second Escape
+                else:
+                    self._last_escape_time = now
         return event
 
     def _exit_insert_mode(self):
         """Exit insert mode and restore the overlay."""
+        log.info("mode: NORMAL")
         self._insert_mode = False
 
         if self._insert_tap:
@@ -674,6 +701,7 @@ class HintOverlay:
 
     def _switch_to_window(self, win_info):
         """Activate the app owning the given window and raise it."""
+        log.info("switch: window=%s", win_info.get(Quartz.kCGWindowOwnerName, "?"))
         bounds = win_info[Quartz.kCGWindowBounds]
         cx = bounds["X"] + bounds["Width"] / 2
         cy = bounds["Y"] + bounds["Height"] / 2
@@ -732,7 +760,7 @@ class HintOverlay:
                 self._switch_to_window(data)
             else:
                 cx, cy = mouse.element_center(data["position"], data["size"])
-                print(f"[hint {hint}] role={data['role']} title={data.get('title', '')!r} desc={data.get('description', '')!r} ({cx:.0f}, {cy:.0f})")
+                log.info("click: hint=%s role=%s title=%r (%.0f, %.0f)", hint, data["role"], data.get("title", ""), cx, cy)
                 self._click_and_refresh(cx, cy)
         elif len(matching) == 0:
             self.typed = ""
