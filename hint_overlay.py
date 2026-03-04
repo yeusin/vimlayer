@@ -42,7 +42,7 @@ _WM_MODE_COLOR = (0.5, 0.25)
 _WM_MODE_FONT_SIZE = 16
 
 
-_HINT_CHARS = "ABCDEFGMNOPQRSTUVWXYZ"  # excludes H, J, K, L (movement) and I (insert mode)
+_HINT_CHARS = "ACDEFGMNOPQRSTUVXYZ"  # excludes H,J,K,L (movement), I (insert), B/W (back/forward)
 
 # macOS hardware key codes → Latin letters (input-source-independent)
 _KEYCODE_TO_CHAR = {
@@ -65,6 +65,7 @@ _KEY_F = 3
 _KEY_SLASH = 44
 _KEY_SPACE = 49
 _KEY_I = 34
+_KEY_W = 13
 _MOUSE_STEP_MIN = 6
 _MOUSE_STEP_MAX = 60
 _MOUSE_ACCEL = 1.2  # multiplier per repeated move
@@ -175,6 +176,10 @@ class HintWindow(NSWindow):
             self.overlay.move_mouse(0, -1, event.isARepeat())
         elif code == _KEY_L:
             self.overlay.move_mouse(1, 0, event.isARepeat())
+        elif code == _KEY_B and not ctrl:
+            self.overlay.mouse_back()
+        elif code == _KEY_W:
+            self.overlay.mouse_forward()
         elif code == _KEY_SPACE:
             self.overlay.click_at_cursor()
         elif code == _KEY_I:
@@ -486,6 +491,14 @@ class HintOverlay:
             self._populate(elements)
 
     # -- Clicking --
+
+    def mouse_back(self):
+        """Send mouse back button to target app."""
+        mouse.back_button()
+
+    def mouse_forward(self):
+        """Send mouse forward button to target app."""
+        mouse.forward_button()
 
     def click_at_cursor(self):
         """Click at the current cursor position, then refresh hints."""

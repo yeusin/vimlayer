@@ -188,40 +188,15 @@ def get_elements(pid):
     return results
 
 
-def _find_scroll_area(element, depth=0):
-    """Find the first AXScrollArea inside a window (the visible content viewport)."""
-    if depth > 5:
-        return None
-    children = _get_attr(element, "AXChildren")
-    if not children:
-        return None
-    for child in children:
-        role = _get_attr(child, "AXRole")
-        if role == "AXScrollArea":
-            return child
-        found = _find_scroll_area(child, depth + 1)
-        if found:
-            return found
-    return None
-
-
 def _get_visible_bounds(pid):
-    """Return (x, y, w, h) of the visible content area for the given PID.
-
-    Tries the focused window's main scroll area first (captures the actual
-    viewport inside a browser).  Falls back to the window frame.
-    """
+    """Return (x, y, w, h) of the focused window frame for the given PID."""
     app_ref = AX.AXUIElementCreateApplication(pid)
     focused = _get_attr(app_ref, "AXFocusedWindow")
     if focused is None:
         return None
 
-    # Try to find the content scroll area for a tighter clip rect
-    scroll = _find_scroll_area(focused)
-    target = scroll if scroll is not None else focused
-
-    pos = _get_attr(target, "AXPosition")
-    size = _get_attr(target, "AXSize")
+    pos = _get_attr(focused, "AXPosition")
+    size = _get_attr(focused, "AXSize")
     if pos is None or size is None:
         return None
     return _element_rect(pos, size)

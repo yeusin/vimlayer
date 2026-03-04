@@ -38,6 +38,36 @@ def click(x, y):
     Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
 
 
+def back_button():
+    """Simulate mouse back button (button 3) press."""
+    pos = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
+    down = Quartz.CGEventCreateMouseEvent(
+        None, Quartz.kCGEventOtherMouseDown, pos, 3
+    )
+    up = Quartz.CGEventCreateMouseEvent(
+        None, Quartz.kCGEventOtherMouseUp, pos, 3
+    )
+    Quartz.CGEventSetIntegerValueField(down, Quartz.kCGMouseEventButtonNumber, 3)
+    Quartz.CGEventSetIntegerValueField(up, Quartz.kCGMouseEventButtonNumber, 3)
+    Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
+    Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
+
+
+def forward_button():
+    """Simulate mouse forward button (button 4) press."""
+    pos = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
+    down = Quartz.CGEventCreateMouseEvent(
+        None, Quartz.kCGEventOtherMouseDown, pos, 4
+    )
+    up = Quartz.CGEventCreateMouseEvent(
+        None, Quartz.kCGEventOtherMouseUp, pos, 4
+    )
+    Quartz.CGEventSetIntegerValueField(down, Quartz.kCGMouseEventButtonNumber, 4)
+    Quartz.CGEventSetIntegerValueField(up, Quartz.kCGMouseEventButtonNumber, 4)
+    Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
+    Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
+
+
 def scroll(lines):
     """Scroll vertically. Positive = up, negative = down."""
     event = Quartz.CGEventCreateScrollWheelEvent(
