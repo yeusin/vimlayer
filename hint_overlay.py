@@ -209,7 +209,8 @@ class HintWindow(NSWindow):
 
 
 class HintOverlay:
-    def __init__(self):
+    def __init__(self, on_mode_change=None):
+        self._on_mode_change = on_mode_change
         self.window = None
         self.labels = []  # [(hint_string, NSTextField, data, kind)]
         self.typed = ""
@@ -219,7 +220,7 @@ class HintOverlay:
         self._scroll_pending = False
         self._ws_observer = None
         self._clicking = False
-        self._hints_visible = True
+        self._hints_visible = False
         self._hints_gen = 0
         self._win_hint_cache = {}  # kCGWindowNumber -> hint char
         self._mouse_dir = None
@@ -231,6 +232,11 @@ class HintOverlay:
         self._last_escape_time = 0
 
     # -- Helpers --
+
+    def _notify_mode(self, mode):
+        """Notify listener of mode change. mode is 'N', 'I', or None (dismissed)."""
+        if self._on_mode_change:
+            self._on_mode_change(mode)
 
     def _activate_overlay_window(self):
         """Activate the overlay window so it captures keystrokes."""
@@ -280,6 +286,7 @@ class HintOverlay:
         self._populate(elements)
         self._activate_overlay_window()
         self._start_watching_focus()
+        self._notify_mode("N")
 
     def dismiss(self):
         """Dismiss the overlay without action."""
@@ -298,6 +305,7 @@ class HintOverlay:
         if self._prev_app:
             self._prev_app.activateWithOptions_(0)
             self._prev_app = None
+        self._notify_mode(None)
 
     # -- Cursor --
 
@@ -614,6 +622,7 @@ class HintOverlay:
             return
         log.info("mode: INSERT")
         self._insert_mode = True
+        self._notify_mode("I")
 
         if self.window:
             self.window.orderOut_(None)
@@ -662,6 +671,7 @@ class HintOverlay:
         """Exit insert mode and restore the overlay."""
         log.info("mode: NORMAL")
         self._insert_mode = False
+        self._notify_mode("N")
 
         if self._insert_tap:
             Quartz.CGEventTapEnable(self._insert_tap, False)
@@ -679,8 +689,8 @@ class HintOverlay:
         self._hide_insert_watermark()
         self.window._set_mode("NORMAL")
         self._activate_overlay_window()
-        if self._hints_visible:
-            self.refresh()
+        self._hide_all_labels()
+        self._hints_visible = False
 
     def _show_insert_watermark(self):
         """Show a passive floating watermark for INSERT mode."""

@@ -16,7 +16,11 @@ def get_cursor_position():
 
 
 def move_cursor(x, y):
-    """Move the mouse cursor to (x, y) using a synthetic mouse move event."""
+    """Move the mouse cursor to (x, y), clamped to screen bounds."""
+    w = Quartz.CGDisplayPixelsWide(Quartz.CGMainDisplayID())
+    h = Quartz.CGDisplayPixelsHigh(Quartz.CGMainDisplayID())
+    x = max(0, min(x, w - 1))
+    y = max(0, min(y, h - 1))
     point = Quartz.CGPointMake(x, y)
     event = Quartz.CGEventCreateMouseEvent(
         None, Quartz.kCGEventMouseMoved, point, Quartz.kCGMouseButtonLeft

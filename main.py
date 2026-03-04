@@ -99,7 +99,15 @@ def main():
     # No Dock icon, no app switcher entry
     app.setActivationPolicy_(2)  # NSApplicationActivationPolicyProhibited
 
-    overlay = hint_overlay.HintOverlay()
+    status_bar_ctrl = StatusBarController.alloc().init()
+
+    def on_mode_change(mode):
+        if mode:
+            status_bar_ctrl._status_item.setTitle_(f"VM:{mode}")
+        else:
+            status_bar_ctrl._status_item.setTitle_("VM")
+
+    overlay = hint_overlay.HintOverlay(on_mode_change=on_mode_change)
 
     def on_hotkey():
         # Schedule on main thread since CGEventTap callback runs on CF runloop
@@ -108,9 +116,6 @@ def main():
     cfg = config.load()
     if not hotkey.register(on_hotkey, keycode=cfg["keycode"], flags=cfg["flags"]):
         return
-
-    # Must retain reference to prevent GC
-    _status_bar_ctrl = StatusBarController.alloc().init()  # noqa: F841
 
     signal.signal(signal.SIGINT, lambda *_: AppHelper.stopEventLoop())
 
