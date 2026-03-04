@@ -13,6 +13,7 @@ from AppKit import (
     NSApplication,
     NSFloatingWindowLevel,
     NSWorkspace,
+    NSRunningApplication,
 )
 from PyObjCTools import AppHelper
 import ApplicationServices as AX
@@ -20,10 +21,18 @@ import accessibility
 import mouse
 
 # Hint label style
-HINT_FONT_SIZE = 11
-HINT_BG_COLOR = (1.0, 0.9, 0.0, 0.9)  # yellow
-HINT_TEXT_COLOR = (0.0, 0.0, 0.0, 1.0)  # black
-HINT_PADDING = 2
+HINT_FONT_SIZE = 12
+HINT_BG_COLOR = (0.15, 0.15, 0.15, 0.85)  # dark gray
+HINT_TEXT_COLOR = (1.0, 1.0, 1.0, 1.0)  # white
+HINT_PADDING = 4
+HINT_CORNER_RADIUS = 4
+
+# Window hint style
+WIN_HINT_FONT_SIZE = 28
+WIN_HINT_BG_COLOR = (0.15, 0.15, 0.15, 0.85)  # dark gray
+WIN_HINT_TEXT_COLOR = (1.0, 1.0, 1.0, 1.0)  # white
+WIN_HINT_PADDING = 12
+WIN_HINT_CORNER_RADIUS = 10
 
 
 _HINT_CHARS = "ABCDEFGIMNOPQRSTUVWXYZ"  # excludes H, J, K, L (used for movement)
@@ -48,6 +57,7 @@ _KEY_B = 11
 _KEY_F = 3
 _KEY_SLASH = 44
 _KEY_SPACE = 49
+_KEY_TAB = 48
 _MOUSE_STEP = 20
 _CTRL_FLAG = 1 << 18  # NSEventModifierFlagControl
 
@@ -138,6 +148,8 @@ class HintWindow(NSWindow):
             self.overlay.move_mouse(_MOUSE_STEP, 0)
         elif code == _KEY_SPACE:
             self.overlay.click_at_cursor()
+        elif code == _KEY_TAB:
+            self.overlay.toggle_window_hints()
         elif code == _KEY_SLASH:
             self.overlay.refresh()
         elif code in _KEYCODE_TO_CHAR and _KEYCODE_TO_CHAR[code].isalpha():
@@ -155,6 +167,7 @@ class HintOverlay:
         self._scroll_pending = False
         self._ws_observer = None
         self._clicking = False
+        self._window_mode = False
 
     def _activate_overlay_window(self):
         """Activate the overlay window so it captures keystrokes."""
@@ -285,11 +298,33 @@ class HintOverlay:
             )
         )
         label.setWantsLayer_(True)
-        label.layer().setCornerRadius_(3)
-        label.layer().setBorderWidth_(0.5)
-        label.layer().setBorderColor_(
-            NSColor.colorWithWhite_alpha_(0.0, 0.3).CGColor()
+        label.layer().setCornerRadius_(HINT_CORNER_RADIUS)
+        return label
+
+    def _create_window_hint_label(self, hint_text, cx, flipped_cy):
+        """Create a large centered hint label for window switching."""
+        label = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 0, 0))
+        label.setStringValue_(hint_text)
+        label.setEditable_(False)
+        label.setSelectable_(False)
+        label.setBezeled_(False)
+        label.setDrawsBackground_(True)
+        label.setBackgroundColor_(
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(*WIN_HINT_BG_COLOR)
         )
+        label.setTextColor_(
+            NSColor.colorWithCalibratedRed_green_blue_alpha_(*WIN_HINT_TEXT_COLOR)
+        )
+        label.setFont_(NSFont.boldSystemFontOfSize_(WIN_HINT_FONT_SIZE))
+        label.setAlignment_(1)  # NSTextAlignmentCenter
+        label.sizeToFit()
+
+        frame = label.frame()
+        w = frame.size.width + WIN_HINT_PADDING * 2
+        h = frame.size.height
+        label.setFrame_(NSMakeRect(cx - w / 2, flipped_cy - h / 2, w, h))
+        label.setWantsLayer_(True)
+        label.layer().setCornerRadius_(WIN_HINT_CORNER_RADIUS)
         return label
 
     def move_mouse(self, dx, dy):
@@ -363,6 +398,88 @@ class HintOverlay:
         if elements:
             self._populate(elements)
 
+    def toggle_window_hints(self):
+        """Toggle between element hints and window-switching hints."""
+        if self._window_mode:
+            self._window_mode = False
+            self.refresh()
+        else:
+            self._window_mode = True
+            self._show_window_hints()
+
+    def _show_window_hints(self):
+        """Show single-char hints on visible windows for switching."""
+        import Quartz
+
+        my_pid = os.getpid()
+        win_list = Quartz.CGWindowListCopyWindowInfo(
+            Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
+            Quartz.kCGNullWindowID,
+        )
+
+        windows = []
+        for w in win_list:
+            pid = w.get(Quartz.kCGWindowOwnerPID, 0)
+            if pid == my_pid:
+                continue
+            layer = w.get(Quartz.kCGWindowLayer, -1)
+            if layer != 0:
+                continue
+            bounds = w.get(Quartz.kCGWindowBounds, {})
+            width = bounds.get("Width", 0)
+            height = bounds.get("Height", 0)
+            if width == 0 or height == 0:
+                continue
+            windows.append(w)
+
+        print(f"[window hints] found {len(windows)} windows")
+        if not windows:
+            return
+
+        # Clear existing labels
+        for _, label, _ in self.labels:
+            label.removeFromSuperview()
+        self.labels = []
+        self.typed = ""
+
+        screen = NSScreen.mainScreen().frame()
+        content = self.window.contentView()
+        hints = _generate_hints(len(windows))
+
+        for hint, w in zip(hints, windows):
+            bounds = w[Quartz.kCGWindowBounds]
+            cx = bounds["X"] + bounds["Width"] / 2
+            cy = bounds["Y"] + bounds["Height"] / 2
+            flipped_y = screen.size.height - cy
+            owner = w.get(Quartz.kCGWindowOwnerName, "?")
+            print(f"[window hint {hint}] {owner} at ({cx:.0f}, {cy:.0f}) flipped_y={flipped_y:.0f}")
+            label = self._create_window_hint_label(hint, cx, flipped_y)
+            content.addSubview_(label)
+            self.labels.append((hint, label, w))
+
+    def _switch_to_window(self, win_info):
+        """Activate the app owning the given window and show its element hints."""
+        import Quartz
+        bounds = win_info[Quartz.kCGWindowBounds]
+        cx = bounds["X"] + bounds["Width"] / 2
+        cy = bounds["Y"] + bounds["Height"] / 2
+        mouse.move_cursor(cx, cy)
+        pid = win_info[Quartz.kCGWindowOwnerPID]
+        app = NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
+        if app:
+            app.activateWithOptions_(0)
+            self._prev_app = app
+            self._pid = pid
+        self._window_mode = False
+        AppHelper.callLater(0.15, self._activate_and_refresh)
+
+    def _activate_and_refresh(self):
+        """Re-activate overlay and refresh element hints after window switch."""
+        if not self.window:
+            return
+        self._activate_overlay_window()
+        self.refresh()
+
     def dismiss(self):
         """Dismiss the overlay without action."""
         self._stop_watching_focus()
@@ -371,6 +488,7 @@ class HintOverlay:
             self.window = None
         self.labels = []
         self.typed = ""
+        self._window_mode = False
         NSApplication.sharedApplication().setActivationPolicy_(2)  # Prohibited
         if self._prev_app:
             self._prev_app.activateWithOptions_(0)
@@ -389,9 +507,12 @@ class HintOverlay:
 
         if len(matching) == 1:
             hint, label, el = matching[0]
-            cx, cy = mouse.element_center(el["position"], el["size"])
-            print(f"[hint {hint}] role={el['role']} title={el.get('title', '')!r} desc={el.get('description', '')!r} ({cx:.0f}, {cy:.0f})")
-            self._click_and_refresh(cx, cy)
+            if self._window_mode:
+                self._switch_to_window(el)
+            else:
+                cx, cy = mouse.element_center(el["position"], el["size"])
+                print(f"[hint {hint}] role={el['role']} title={el.get('title', '')!r} desc={el.get('description', '')!r} ({cx:.0f}, {cy:.0f})")
+                self._click_and_refresh(cx, cy)
         elif len(matching) == 0:
             # No match — reset typed filter and re-show all hints
             self.typed = ""
