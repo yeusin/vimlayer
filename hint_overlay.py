@@ -58,6 +58,7 @@ _KEY_F = 3
 _KEY_SLASH = 44
 _KEY_SPACE = 49
 _KEY_TAB = 48
+_KEY_I = 34
 _MOUSE_STEP = 20
 _CTRL_FLAG = 1 << 18  # NSEventModifierFlagControl
 
@@ -104,24 +105,49 @@ class HintWindow(NSWindow):
         self.setHasShadow_(False)
 
         # Centered "VM" watermark
-        vm_label = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 0, 0))
-        vm_label.setStringValue_("VM")
-        vm_label.setEditable_(False)
-        vm_label.setSelectable_(False)
-        vm_label.setBezeled_(False)
-        vm_label.setDrawsBackground_(False)
-        vm_label.setTextColor_(NSColor.colorWithWhite_alpha_(0.5, 0.30))
-        vm_label.setFont_(NSFont.boldSystemFontOfSize_(48))
-        vm_label.sizeToFit()
-        f = vm_label.frame()
-        vm_label.setFrameOrigin_(((screen.size.width - f.size.width) / 2,
-                                   (screen.size.height - f.size.height) / 2))
-        self.contentView().addSubview_(vm_label)
+        self._vm_label = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 0, 0))
+        self._vm_label.setStringValue_("VM")
+        self._vm_label.setEditable_(False)
+        self._vm_label.setSelectable_(False)
+        self._vm_label.setBezeled_(False)
+        self._vm_label.setDrawsBackground_(False)
+        self._vm_label.setTextColor_(NSColor.colorWithWhite_alpha_(0.5, 0.30))
+        self._vm_label.setFont_(NSFont.boldSystemFontOfSize_(48))
+        self._vm_label.sizeToFit()
+        vm_f = self._vm_label.frame()
+
+        # Mode label below VM
+        self._mode_label = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 0, 0))
+        self._mode_label.setEditable_(False)
+        self._mode_label.setSelectable_(False)
+        self._mode_label.setBezeled_(False)
+        self._mode_label.setDrawsBackground_(False)
+        self._mode_label.setTextColor_(NSColor.colorWithWhite_alpha_(0.5, 0.25))
+        self._mode_label.setFont_(NSFont.systemFontOfSize_(16))
+        self._mode_label.setAlignment_(1)  # center
+
+        self._screen_size = screen.size
+        cx = screen.size.width / 2
+        cy = screen.size.height / 2
+        self._vm_label.setFrameOrigin_((cx - vm_f.size.width / 2, cy))
+        self._set_mode("NORMAL")
+
+        self.contentView().addSubview_(self._vm_label)
+        self.contentView().addSubview_(self._mode_label)
 
         return self
 
+    def _set_mode(self, text):
+        self._mode_label.setStringValue_(text)
+        self._mode_label.sizeToFit()
+        f = self._mode_label.frame()
+        vm_f = self._vm_label.frame()
+        cx = self._screen_size.width / 2
+        self._mode_label.setFrameOrigin_((cx - f.size.width / 2,
+                                           vm_f.origin.y - f.size.height - 4))
+
     def canBecomeKeyWindow(self):
-        return True
+        return not self.overlay._insert_mode
 
     def resignKeyWindow(self):
         objc.super(HintWindow, self).resignKeyWindow()
@@ -150,6 +176,8 @@ class HintWindow(NSWindow):
             self.overlay.click_at_cursor()
         elif code == _KEY_TAB:
             self.overlay.toggle_window_hints()
+        elif code == _KEY_I:
+            self.overlay.enter_insert_mode()
         elif code == _KEY_SLASH:
             self.overlay.refresh()
         elif code in _KEYCODE_TO_CHAR and _KEYCODE_TO_CHAR[code].isalpha():
@@ -168,6 +196,9 @@ class HintOverlay:
         self._ws_observer = None
         self._clicking = False
         self._window_mode = False
+        self._insert_mode = False
+        self._insert_tap = None
+        self._insert_source = None
 
     def _activate_overlay_window(self):
         """Activate the overlay window so it captures keystrokes."""
@@ -233,7 +264,7 @@ class HintOverlay:
 
     def _on_app_activated(self, note):
         """Called when any app gains focus. Refresh hints for the newly focused app."""
-        if not self.window or self._clicking:
+        if not self.window or self._clicking or self._insert_mode:
             return
         activated = note.userInfo()["NSWorkspaceApplicationKey"]
         activated_pid = activated.processIdentifier()
@@ -398,6 +429,137 @@ class HintOverlay:
         if elements:
             self._populate(elements)
 
+    def enter_insert_mode(self):
+        """Enter insert mode: pass all keys to the target app until Escape."""
+        import Quartz
+
+        if self._insert_mode:
+            return
+        self._insert_mode = True
+
+        # Hide main window, show a passive INSERT watermark
+        if self.window:
+            self.window.orderOut_(None)
+        self._show_insert_watermark()
+
+        # Give focus to target app
+        NSApplication.sharedApplication().setActivationPolicy_(2)  # Prohibited
+        if self._prev_app:
+            self._prev_app.activateWithOptions_(0)
+
+        # Install a global tap to catch Escape
+        tap = Quartz.CGEventTapCreate(
+            Quartz.kCGSessionEventTap,
+            Quartz.kCGHeadInsertEventTap,
+            Quartz.kCGEventTapOptionDefault,
+            Quartz.CGEventMaskBit(Quartz.kCGEventKeyDown),
+            self._insert_tap_callback,
+            None,
+        )
+        if tap:
+            self._insert_tap = tap
+            self._insert_source = Quartz.CFMachPortCreateRunLoopSource(None, tap, 0)
+            Quartz.CFRunLoopAddSource(
+                Quartz.CFRunLoopGetCurrent(), self._insert_source, Quartz.kCFRunLoopCommonModes
+            )
+            Quartz.CGEventTapEnable(tap, True)
+
+    def _insert_tap_callback(self, proxy, event_type, event, refcon):
+        """Global tap callback that catches Escape to exit insert mode."""
+        import Quartz
+
+        if event_type == Quartz.kCGEventTapDisabledByTimeout:
+            if self._insert_tap:
+                Quartz.CGEventTapEnable(self._insert_tap, True)
+            return event
+        if event_type == Quartz.kCGEventKeyDown:
+            keycode = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
+            if keycode == _KEY_ESCAPE:
+                AppHelper.callAfter(self._exit_insert_mode)
+                return None  # Suppress the Escape
+        return event
+
+    def _exit_insert_mode(self):
+        """Exit insert mode and restore the overlay."""
+        import Quartz
+
+        self._insert_mode = False
+
+        # Remove the tap
+        if self._insert_tap:
+            Quartz.CGEventTapEnable(self._insert_tap, False)
+            if self._insert_source:
+                Quartz.CFRunLoopRemoveSource(
+                    Quartz.CFRunLoopGetCurrent(), self._insert_source, Quartz.kCFRunLoopCommonModes
+                )
+                self._insert_source = None
+            self._insert_tap = None
+
+        if not self.window:
+            return
+
+        # Update target to current frontmost app
+        front = NSWorkspace.sharedWorkspace().frontmostApplication()
+        if front.processIdentifier() != os.getpid():
+            self._prev_app = front
+            self._pid = front.processIdentifier()
+
+        self._hide_insert_watermark()
+        self.window._set_mode("NORMAL")
+        self._activate_overlay_window()
+        self.refresh()
+
+    def _show_insert_watermark(self):
+        """Show a passive floating watermark for INSERT mode."""
+        screen = NSScreen.mainScreen().frame()
+        win = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+            NSMakeRect(0, 0, screen.size.width, screen.size.height),
+            0, NSBackingStoreBuffered, False,
+        )
+        win.setLevel_(NSFloatingWindowLevel)
+        win.setOpaque_(False)
+        win.setBackgroundColor_(NSColor.colorWithWhite_alpha_(0.0, 0.0))
+        win.setIgnoresMouseEvents_(True)
+        win.setHasShadow_(False)
+
+        cx, cy = screen.size.width / 2, screen.size.height / 2
+
+        vm = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 0, 0))
+        vm.setStringValue_("VM")
+        vm.setEditable_(False)
+        vm.setSelectable_(False)
+        vm.setBezeled_(False)
+        vm.setDrawsBackground_(False)
+        vm.setTextColor_(NSColor.colorWithWhite_alpha_(0.5, 0.30))
+        vm.setFont_(NSFont.boldSystemFontOfSize_(48))
+        vm.sizeToFit()
+        vm_f = vm.frame()
+        vm.setFrameOrigin_((cx - vm_f.size.width / 2, cy))
+
+        mode = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 0, 0))
+        mode.setStringValue_("INSERT")
+        mode.setEditable_(False)
+        mode.setSelectable_(False)
+        mode.setBezeled_(False)
+        mode.setDrawsBackground_(False)
+        mode.setTextColor_(NSColor.colorWithWhite_alpha_(0.5, 0.25))
+        mode.setFont_(NSFont.systemFontOfSize_(16))
+        mode.setAlignment_(1)
+        mode.sizeToFit()
+        mode_f = mode.frame()
+        mode.setFrameOrigin_((cx - mode_f.size.width / 2, cy - mode_f.size.height - 4))
+
+        win.contentView().addSubview_(vm)
+        win.contentView().addSubview_(mode)
+        win.orderFrontRegardless()
+        self._insert_window = win
+
+    def _hide_insert_watermark(self):
+        """Remove the INSERT watermark window."""
+        if hasattr(self, '_insert_window') and self._insert_window:
+            self._insert_window.orderOut_(None)
+            self._insert_window = None
+
     def toggle_window_hints(self):
         """Toggle between element hints and window-switching hints."""
         if self._window_mode:
@@ -482,6 +644,9 @@ class HintOverlay:
 
     def dismiss(self):
         """Dismiss the overlay without action."""
+        if self._insert_mode:
+            self._exit_insert_mode()
+        self._hide_insert_watermark()
         self._stop_watching_focus()
         if self.window:
             self.window.orderOut_(None)
