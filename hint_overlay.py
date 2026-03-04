@@ -92,6 +92,22 @@ class HintWindow(NSWindow):
         self.setBackgroundColor_(NSColor.colorWithWhite_alpha_(0.0, 0.01))
         self.setIgnoresMouseEvents_(True)
         self.setHasShadow_(False)
+
+        # Centered "VM" watermark
+        vm_label = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 0, 0))
+        vm_label.setStringValue_("VM")
+        vm_label.setEditable_(False)
+        vm_label.setSelectable_(False)
+        vm_label.setBezeled_(False)
+        vm_label.setDrawsBackground_(False)
+        vm_label.setTextColor_(NSColor.colorWithWhite_alpha_(0.5, 0.30))
+        vm_label.setFont_(NSFont.boldSystemFontOfSize_(48))
+        vm_label.sizeToFit()
+        f = vm_label.frame()
+        vm_label.setFrameOrigin_(((screen.size.width - f.size.width) / 2,
+                                   (screen.size.height - f.size.height) / 2))
+        self.contentView().addSubview_(vm_label)
+
         return self
 
     def canBecomeKeyWindow(self):
@@ -99,7 +115,6 @@ class HintWindow(NSWindow):
 
     def resignKeyWindow(self):
         objc.super(HintWindow, self).resignKeyWindow()
-        self.overlay.dismiss()
 
     def keyDown_(self, event):
         code = event.keyCode()
@@ -138,6 +153,7 @@ class HintOverlay:
         self._pid = None
         self._scroll_gen = 0
         self._scroll_pending = False
+        self._ws_observer = None
 
     def show(self):
         """Show hint overlay on clickable elements of the frontmost app."""
@@ -165,6 +181,9 @@ class HintOverlay:
         self.window.makeKeyAndOrderFront_(None)
         app.activateIgnoringOtherApps_(True)
 
+        # Watch for target app gaining focus (alt-tab, mouse click, etc.)
+        self._start_watching_focus()
+
     def _center_cursor_on_app(self):
         """Move the cursor to the center of the focused window of the target app."""
         app_ref = AX.AXUIElementCreateApplication(self._pid)
@@ -178,6 +197,45 @@ class HintOverlay:
         _, p = AX.AXValueGetValue(pos, AX.kAXValueCGPointType, None)
         _, s = AX.AXValueGetValue(size, AX.kAXValueCGSizeType, None)
         mouse.move_cursor(p.x + s.width / 2, p.y + s.height / 2)
+
+    def _start_watching_focus(self):
+        """Register for workspace app-activation notifications."""
+        ws = NSWorkspace.sharedWorkspace()
+        self._ws_observer = ws.notificationCenter().addObserverForName_object_queue_usingBlock_(
+            "NSWorkspaceDidActivateApplicationNotification",
+            None,
+            None,
+            lambda note: AppHelper.callAfter(self._on_app_activated, note),
+        )
+
+    def _stop_watching_focus(self):
+        """Remove the workspace observer."""
+        if self._ws_observer:
+            NSWorkspace.sharedWorkspace().notificationCenter().removeObserver_(self._ws_observer)
+            self._ws_observer = None
+
+    def _on_app_activated(self, note):
+        """Called when any app gains focus. Refresh hints for the newly focused app."""
+        if not self.window:
+            return
+        activated = note.userInfo()["NSWorkspaceApplicationKey"]
+        activated_pid = activated.processIdentifier()
+        # Ignore our own activation (we're about to reclaim key window)
+        if activated_pid == os.getpid():
+            return
+        # Clear old hints immediately
+        for _, label, _ in self.labels:
+            label.setHidden_(True)
+        # Switch target to the newly focused app
+        self._prev_app = activated
+        self._pid = activated_pid
+        elements = accessibility.get_clickable_elements(self._pid)
+        if elements:
+            self._populate(elements)
+        app = NSApplication.sharedApplication()
+        app.setActivationPolicy_(1)
+        self.window.makeKeyAndOrderFront_(None)
+        app.activateIgnoringOtherApps_(True)
 
     def _populate(self, elements):
         """Place hint labels on the overlay for the given elements."""
@@ -258,10 +316,35 @@ class HintOverlay:
         self._populate(elements)
 
     def click_at_cursor(self):
-        """Click at the current cursor position and dismiss."""
+        """Click at the current cursor position, then refresh hints."""
         x, y = mouse.get_cursor_position()
-        self.dismiss()
-        AppHelper.callLater(0.15, mouse.click, x, y)
+        self._click_and_refresh(x, y)
+
+    def _click_and_refresh(self, x, y):
+        """Hide hints, click at (x, y) in the target app, then refresh hints."""
+        for _, label, _ in self.labels:
+            label.setHidden_(True)
+        # Give focus to target app so click lands correctly
+        if self._prev_app:
+            self._prev_app.activateWithOptions_(0)
+        AppHelper.callLater(0.15, lambda: self._perform_click_and_refresh(x, y))
+
+    def _perform_click_and_refresh(self, x, y):
+        """Execute the click and refresh hints afterward."""
+        if not self.window:
+            return
+        mouse.click(x, y)
+        AppHelper.callLater(0.3, self._reclaim_and_refresh)
+
+    def _reclaim_and_refresh(self):
+        """Reclaim key window and refresh hints after a click."""
+        if not self.window:
+            return
+        self.refresh()
+        app = NSApplication.sharedApplication()
+        app.setActivationPolicy_(1)
+        self.window.makeKeyAndOrderFront_(None)
+        app.activateIgnoringOtherApps_(True)
 
     def refresh(self):
         """Re-collect elements and refresh hints."""
@@ -271,6 +354,7 @@ class HintOverlay:
 
     def dismiss(self):
         """Dismiss the overlay without action."""
+        self._stop_watching_focus()
         if self.window:
             self.window.orderOut_(None)
             self.window = None
@@ -295,12 +379,12 @@ class HintOverlay:
         if len(matching) == 1:
             hint, label, el = matching[0]
             cx, cy = mouse.element_center(el["position"], el["size"])
-            self.dismiss()
-            # Delay click to let the target app regain focus
-            AppHelper.callLater(0.15, mouse.click, cx, cy)
+            self._click_and_refresh(cx, cy)
         elif len(matching) == 0:
-            # No match — dismiss
-            self.dismiss()
+            # No match — reset typed filter and re-show all hints
+            self.typed = ""
+            for h, lbl, _ in self.labels:
+                lbl.setHidden_(False)
 
     def backspace(self):
         """Remove last typed char and re-show matching hints."""
