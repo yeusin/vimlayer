@@ -2,7 +2,6 @@
 
 import logging
 import os
-import time
 import objc
 import Quartz
 from AppKit import (
@@ -70,7 +69,6 @@ _MOUSE_S0 = 10        # base sensitivity (pixels per step)
 _MOUSE_STEP_MAX = 100  # cap on maximum step size
 _MOUSE_RAMP_FRAMES = 30  # frames to reach max speed
 _CTRL_FLAG = 1 << 18  # NSEventModifierFlagControl
-_DOUBLE_ESC_INTERVAL = 0.3  # seconds between two Escape presses
 
 _ALL_ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -236,13 +234,6 @@ class HintWindow(NSWindow):
             self.overlay.passthrough_key(event)
             return
         if code == _KEY_ESCAPE:
-            if self.overlay._insert_mode:
-                now = time.monotonic()
-                if now - self.overlay._last_escape_time <= _DOUBLE_ESC_INTERVAL:
-                    self.overlay._last_escape_time = 0
-                    self.overlay.dismiss()
-                else:
-                    self.overlay._last_escape_time = now
             return
         if code == _KEY_BACKSPACE:
             self.overlay.backspace()
@@ -296,7 +287,6 @@ class HintOverlay:
         self._insert_tap = None
         self._insert_source = None
         self._insert_window = None
-        self._last_escape_time = 0
         self.reload_keybindings()
 
     def reload_keybindings(self):
@@ -334,11 +324,13 @@ class HintOverlay:
     # -- Show / Dismiss --
 
     def toggle(self):
-        """Toggle the overlay on/off."""
-        if self.window:
-            self.dismiss()
-        else:
+        """Cycle: deactivated→activate, normal→deactivate, insert→normal."""
+        if not self.window:
             self.show()
+        elif self._insert_mode:
+            AppHelper.callAfter(self._exit_insert_mode)
+        else:
+            self.dismiss()
 
     def show(self):
         """Show hint overlay on clickable elements of the frontmost app."""
@@ -735,16 +727,6 @@ class HintOverlay:
             if self._insert_tap:
                 Quartz.CGEventTapEnable(self._insert_tap, True)
             return event
-        if event_type == Quartz.kCGEventKeyDown:
-            keycode = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
-            if keycode == _KEY_ESCAPE:
-                now = time.monotonic()
-                if now - self._last_escape_time <= _DOUBLE_ESC_INTERVAL:
-                    self._last_escape_time = 0
-                    AppHelper.callAfter(self._exit_insert_mode)
-                    return None  # suppress second Escape
-                else:
-                    self._last_escape_time = now
         return event
 
     def _exit_insert_mode(self):
