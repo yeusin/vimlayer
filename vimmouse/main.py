@@ -29,10 +29,10 @@ objc.loadBundle(
     "/System/Library/Frameworks/ServiceManagement.framework",
 )
 
-from . import config
-from . import hotkey
-from . import hint_overlay
-from .settings import SettingsController
+from vimmouse import config
+from vimmouse import hotkey
+from vimmouse import hint_overlay
+from vimmouse.settings import SettingsController
 
 
 class StatusBarController(NSObject):

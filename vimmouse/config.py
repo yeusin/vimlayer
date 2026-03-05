@@ -24,6 +24,7 @@ _DEFAULT_KEYBINDINGS = {
     "insert_mode": {"keycode": 34},        # i
     "forward": {"keycode": 13},            # w
     "back": {"keycode": 11},               # b
+    "right_click": {"keycode": 49, "shift": True},  # shift+space
 }
 
 

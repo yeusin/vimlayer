@@ -42,6 +42,20 @@ def click(x, y):
     Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
 
 
+def right_click(x, y):
+    """Right-click at (x, y) by posting right mouse down + up events."""
+    move_cursor(x, y)
+    point = Quartz.CGPointMake(x, y)
+    down = Quartz.CGEventCreateMouseEvent(
+        None, Quartz.kCGEventRightMouseDown, point, Quartz.kCGMouseButtonRight
+    )
+    up = Quartz.CGEventCreateMouseEvent(
+        None, Quartz.kCGEventRightMouseUp, point, Quartz.kCGMouseButtonRight
+    )
+    Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
+    Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
+
+
 def back_button():
     """Simulate mouse back button (button 3) press."""
     pos = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
