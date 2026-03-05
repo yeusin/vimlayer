@@ -17,18 +17,16 @@ VimMouse overlays hint labels on clickable elements (buttons, links, text fields
 
 ## Installation
 
-Requires Python 3.13+ and macOS.
+Requires Python 3.13+, macOS, and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-pip install -e .
-vimmouse
+uv run python -m vimmouse.main
 ```
 
 ### Build macOS App Bundle
 
 ```bash
-pip install py2app setuptools
-python setup.py py2app
+uv run --group dev python setup.py py2app
 ```
 
 The app bundle will be created in `dist/VimMouse.app`.
@@ -41,13 +39,7 @@ VimMouse requires Accessibility access to detect UI elements and intercept the g
 
 ### Activation
 
-Press **Cmd+Shift+Space** (default) to activate VimMouse. The hotkey cycles through states:
-
-| Current State | Hotkey Action |
-|---------------|---------------|
-| Deactivated | Activate (enter Normal mode) |
-| Normal mode | Deactivate (dismiss overlay) |
-| Insert mode | Return to Normal mode |
+VimMouse enters Normal mode immediately on launch. Press **Cmd+Shift+Space** (default) to return to Normal mode from Insert mode.
 
 ### Modes
 
@@ -65,6 +57,7 @@ Press **Cmd+Shift+Space** (default) to activate VimMouse. The hotkey cycles thro
 | `i` | Enter Insert mode |
 | `w` | Mouse forward button |
 | `b` | Mouse back button |
+| `Ctrl+W` | Cycle through windows |
 | `Ctrl+B` | Scroll up |
 | `Ctrl+F` | Scroll down |
 | `Cmd+key` | Passed through to the target app |
@@ -111,16 +104,16 @@ Example config:
 ## Project Structure
 
 ```
-vimmouse/
-├── main.py             # Entry point, status bar, app lifecycle
-├── hint_overlay.py     # Overlay window, hints, keyboard handling
-├── accessibility.py    # AX tree traversal, element detection
-├── mouse.py            # Cursor movement, clicking, scrolling
-├── config.py           # Config loading/saving, default keybindings
-├── settings.py         # Settings UI, hotkey/key recorder
-├── hotkey.py           # Global hotkey via CGEventTap
-├── setup.py            # py2app build config
-└── pyproject.toml      # Project metadata and dependencies
+├── pyproject.toml          # Project metadata and dependencies
+├── setup.py                # py2app build config
+└── vimmouse/
+    ├── main.py             # Entry point, status bar, app lifecycle
+    ├── hint_overlay.py     # Overlay window, hints, keyboard handling
+    ├── accessibility.py    # AX tree traversal, element detection
+    ├── mouse.py            # Cursor movement, clicking, scrolling
+    ├── config.py           # Config loading/saving, default keybindings
+    ├── settings.py         # Settings UI, hotkey/key recorder
+    └── hotkey.py           # Global hotkey via CGEventTap
 ```
 
 ## License
