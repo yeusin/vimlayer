@@ -171,9 +171,9 @@ def _add_watermark(container, screen_size, mode_text):
 
 
 class HintWindow(NSWindow):
-    """Transparent full-screen window for visual overlay (hints, border, watermark)."""
+    """Transparent full-screen window for visual overlay (hints, watermark)."""
 
-    def initWithOverlay_(self, overlay):
+    def init(self):
         screen = NSScreen.mainScreen().frame()
         self = objc.super(HintWindow, self).initWithContentRect_styleMask_backing_defer_(
             NSMakeRect(0, 0, screen.size.width, screen.size.height),
@@ -183,14 +183,11 @@ class HintWindow(NSWindow):
         )
         if self is None:
             return None
-        self.overlay = overlay
         self.setLevel_(NSFloatingWindowLevel)
         self.setOpaque_(False)
         self.setBackgroundColor_(NSColor.colorWithWhite_alpha_(0.0, 0.01))
         self.setIgnoresMouseEvents_(True)
         self.setHasShadow_(False)
-
-        self._screen_size = screen.size
 
         self._wm_box, self._vm_label, self._mode_label = _add_watermark(
             self.contentView(), screen.size, "NORMAL"
@@ -222,9 +219,6 @@ class HintWindow(NSWindow):
 
         AppHelper.callLater(_WM_FLASH_DURATION, _hide)
 
-    def canBecomeKeyWindow(self):
-        return False
-
 
 class HintOverlay:
     def __init__(self, on_mode_change=None):
@@ -232,7 +226,6 @@ class HintOverlay:
         self.window = None
         self.labels = []  # [(hint_string, NSTextField, data, kind)]
         self.typed = ""
-        self._prev_app = None
         self._pid = None
         self._scroll_gen = 0
         self._scroll_pending = False
@@ -273,7 +266,6 @@ class HintOverlay:
         """Update target to the current frontmost app (skip self)."""
         front = NSWorkspace.sharedWorkspace().frontmostApplication()
         if front.processIdentifier() != os.getpid():
-            self._prev_app = front
             self._pid = front.processIdentifier()
 
     # -- Global event tap for normal mode --
@@ -391,28 +383,12 @@ class HintOverlay:
         self._update_target_app()
         if self._pid:
             log.info("show: pid=%d", self._pid)
-        self.window = HintWindow.alloc().initWithOverlay_(self)
+        self.window = HintWindow.alloc().init()
         self.window.orderFrontRegardless()
         self._install_normal_tap()
         self._start_watching_focus()
         self.window._flash_watermark()
         self._notify_mode("N")
-
-    # -- Cursor --
-
-    def _center_cursor_on_app(self):
-        """Move the cursor to the center of the focused window of the target app."""
-        app_ref = AX.AXUIElementCreateApplication(self._pid)
-        err, focused = AX.AXUIElementCopyAttributeValue(app_ref, "AXFocusedWindow", None)
-        if err != 0 or focused is None:
-            return
-        err, pos = AX.AXUIElementCopyAttributeValue(focused, "AXPosition", None)
-        _, size = AX.AXUIElementCopyAttributeValue(focused, "AXSize", None)
-        if pos is None or size is None:
-            return
-        _, p = AX.AXValueGetValue(pos, AX.kAXValueCGPointType, None)
-        _, s = AX.AXValueGetValue(size, AX.kAXValueCGSizeType, None)
-        mouse.move_cursor(p.x + s.width / 2, p.y + s.height / 2)
 
     # -- Focus watching --
 
@@ -426,12 +402,6 @@ class HintOverlay:
             lambda note: AppHelper.callAfter(self._on_app_activated, note),
         )
 
-    def _stop_watching_focus(self):
-        """Remove the workspace observer."""
-        if self._ws_observer:
-            NSWorkspace.sharedWorkspace().notificationCenter().removeObserver_(self._ws_observer)
-            self._ws_observer = None
-
     def _on_app_activated(self, note):
         """Called when any app gains focus. Refresh hints for the newly focused app."""
         if not self.window or self._clicking or self._insert_mode:
@@ -441,7 +411,6 @@ class HintOverlay:
         if activated_pid == os.getpid():
             return
         self._hide_all_labels()
-        self._prev_app = activated
         self._pid = activated_pid
         if self._hints_visible:
             elements = accessibility.get_clickable_elements(self._pid)
@@ -478,7 +447,6 @@ class HintOverlay:
 
         # Single pass: reuse cache or assign new
         available_iter = iter(c for c in chars)
-        available_next = [None]  # mutable container for the next available char
 
         def next_available():
             while True:
@@ -831,10 +799,10 @@ class HintOverlay:
         app = NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
         if app:
             app.activateWithOptions_(0)
-            self._prev_app = app
             self._pid = pid
         self._raise_window(pid, bounds)
-        self._activate_and_refresh()
+        if self.window:
+            self.refresh()
 
     def _raise_window(self, pid, bounds):
         """Raise a specific window by matching its position/size via Accessibility."""
@@ -854,12 +822,6 @@ class HintOverlay:
             if abs(p.x - tx) < 2 and abs(p.y - ty) < 2 and abs(s.width - tw) < 2 and abs(s.height - th) < 2:
                 AX.AXUIElementPerformAction(win, "AXRaise")
                 return
-
-    def _activate_and_refresh(self):
-        """Refresh element hints after window switch."""
-        if not self.window:
-            return
-        self.refresh()
 
     # -- Hint typing --
 
