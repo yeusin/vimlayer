@@ -190,12 +190,13 @@ class HintWindow(NSWindow):
             self.overlay.passthrough_key(event)
             return
         if code == _KEY_ESCAPE:
-            now = time.monotonic()
-            if now - self.overlay._last_escape_time <= _DOUBLE_ESC_INTERVAL:
-                self.overlay._last_escape_time = 0
-                self.overlay.dismiss()
-            else:
-                self.overlay._last_escape_time = now
+            if self.overlay._insert_mode:
+                now = time.monotonic()
+                if now - self.overlay._last_escape_time <= _DOUBLE_ESC_INTERVAL:
+                    self.overlay._last_escape_time = 0
+                    self.overlay.dismiss()
+                else:
+                    self.overlay._last_escape_time = now
             return
         if code == _KEY_BACKSPACE:
             self.overlay.backspace()
