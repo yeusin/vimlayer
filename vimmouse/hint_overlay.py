@@ -127,7 +127,9 @@ _WINDOW_ACTIONS = {
 def _compute_hint_chars(bindings):
     """Return hint chars string excluding keys bound to actions."""
     bound_keycodes = set()
-    for spec in bindings.values():
+    for action, spec in bindings.items():
+        if action.startswith("win_"):
+            continue
         specs = spec if isinstance(spec, list) else [spec]
         for s in specs:
             if not s.get("ctrl") and not s.get("shift"):
@@ -273,7 +275,7 @@ class HintOverlay:
         self._clicking = False
         self._hints_visible = False
         self._hints_gen = 0
-        self._win_hint_cache = {}  # kCGWindowNumber -> hint char
+
         self._mouse_dir = None
         self._mouse_repeat_count = 0
         self._insert_mode = False
@@ -506,37 +508,16 @@ class HintOverlay:
         return windows
 
     def _assign_window_hints(self, windows):
-        """Assign single-char hints to windows, reusing cached assignments."""
+        """Assign single-char hints to windows."""
         chars = self._hint_chars
-        used = set()
         assignments = []
-
-        # Single pass: reuse cache or assign new
-        available_iter = iter(c for c in chars)
-
-        def next_available():
-            while True:
-                try:
-                    c = next(available_iter)
-                except StopIteration:
-                    return None
-                if c not in used:
-                    return c
-
-        new_cache = {}
-        for w in windows:
-            wid = w.get(Quartz.kCGWindowNumber, 0)
-            cached = self._win_hint_cache.get(wid)
-            if cached and cached not in used:
-                hint = cached
-            else:
-                hint = next_available()
-            if hint:
-                used.add(hint)
-                new_cache[wid] = hint
-                assignments.append((hint, w))
-
-        self._win_hint_cache = new_cache
+        used = set()
+        for i, w in enumerate(windows):
+            if i >= len(chars):
+                break
+            hint = chars[i]
+            used.add(hint)
+            assignments.append((hint, w))
         return assignments, used
 
     def _generate_element_hints(self, count, used_chars):
