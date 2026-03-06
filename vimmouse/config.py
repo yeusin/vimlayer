@@ -26,7 +26,24 @@ _DEFAULT_KEYBINDINGS = {
     "forward": {"keycode": 13},            # w
     "back": {"keycode": 11},               # b
     "right_click": {"keycode": 49, "shift": True},  # shift+space
-    "cycle_window": {"keycode": 13, "ctrl": True},  # ctrl+w
+    "window_prefix": {"keycode": 13, "ctrl": True},  # ctrl+w
+    "win_cycle": {"keycode": 13, "ctrl": True},       # ctrl+w (after prefix)
+    "win_tile_1": {"keycode": 18},                     # 1
+    "win_tile_2": {"keycode": 19},                     # 2
+    "win_tile_3": {"keycode": 20},                     # 3
+    "win_tile_4": {"keycode": 21},                     # 4
+    "win_sixth_tl": {"keycode": 12},                   # q
+    "win_sixth_tc": {"keycode": 13},                   # w
+    "win_sixth_tr": {"keycode": 14},                   # e
+    "win_sixth_bl": {"keycode": 0},                    # a
+    "win_sixth_bc": {"keycode": 1},                    # s
+    "win_sixth_br": {"keycode": 2},                    # d
+    "win_half_left": {"keycode": 4},                   # h
+    "win_half_down": {"keycode": 38},                  # j
+    "win_half_up": {"keycode": 40},                    # k
+    "win_half_right": {"keycode": 37},                 # l
+    "win_center": {"keycode": 8},                      # c
+    "win_maximize": {"keycode": 36},                   # enter
 }
 
 

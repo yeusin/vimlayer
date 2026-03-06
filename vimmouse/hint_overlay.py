@@ -24,6 +24,7 @@ from . import accessibility
 from . import config
 from .launcher import Launcher
 from . import mouse
+from . import window_manager
 
 log = logging.getLogger(__name__)
 
@@ -78,11 +79,49 @@ def _build_binding_lookup(bindings):
     """Build a dict mapping (keycode, ctrl, shift) → action from keybindings config."""
     lookup = {}
     for action, spec in bindings.items():
+        if action.startswith("win_"):
+            continue
         specs = spec if isinstance(spec, list) else [spec]
         for s in specs:
             key = (s["keycode"], bool(s.get("ctrl", False)), bool(s.get("shift", False)))
             lookup[key] = action
     return lookup
+
+
+def _build_window_binding_lookup(bindings):
+    """Build a dict mapping (keycode, ctrl) → action for window sub-commands."""
+    lookup = {}
+    for action, spec in bindings.items():
+        if not action.startswith("win_"):
+            continue
+        specs = spec if isinstance(spec, list) else [spec]
+        for s in specs:
+            key = (s["keycode"], bool(s.get("ctrl", False)))
+            lookup[key] = action
+    return lookup
+
+
+# Window sub-command dispatch: action → (overlay) → callable
+# Each returns a no-arg callable that AppHelper.callAfter can invoke.
+_WINDOW_ACTIONS = {
+    "win_cycle": lambda o: o.cycle_window,
+    "win_tile_1": lambda o: lambda: window_manager.tile_window(1),
+    "win_tile_2": lambda o: lambda: window_manager.tile_window(2),
+    "win_tile_3": lambda o: lambda: window_manager.tile_window(3),
+    "win_tile_4": lambda o: lambda: window_manager.tile_window(4),
+    "win_sixth_tl": lambda o: lambda: window_manager.tile_window_sixth(0, 0),
+    "win_sixth_tc": lambda o: lambda: window_manager.tile_window_sixth(1, 0),
+    "win_sixth_tr": lambda o: lambda: window_manager.tile_window_sixth(2, 0),
+    "win_sixth_bl": lambda o: lambda: window_manager.tile_window_sixth(0, 1),
+    "win_sixth_bc": lambda o: lambda: window_manager.tile_window_sixth(1, 1),
+    "win_sixth_br": lambda o: lambda: window_manager.tile_window_sixth(2, 1),
+    "win_half_left": lambda o: lambda: window_manager.tile_window_half("left"),
+    "win_half_down": lambda o: lambda: window_manager.tile_window_half("bottom"),
+    "win_half_up": lambda o: lambda: window_manager.tile_window_half("top"),
+    "win_half_right": lambda o: lambda: window_manager.tile_window_half("right"),
+    "win_center": lambda o: window_manager.center_window,
+    "win_maximize": lambda o: window_manager.toggle_maximize,
+}
 
 
 def _compute_hint_chars(bindings):
@@ -246,6 +285,7 @@ class HintOverlay:
         self._cycle_windows = None
         self._cycle_idx = -1
         self._cycle_gen = 0
+        self._window_cmd_pending = False
         self._launcher = Launcher(on_dismiss=self._on_launcher_dismiss)
         self.reload_keybindings()
 
@@ -253,6 +293,7 @@ class HintOverlay:
         """Load keybindings from config and rebuild lookup tables."""
         self._bindings = config.load_keybindings()
         self._binding_lookup = _build_binding_lookup(self._bindings)
+        self._window_binding_lookup = _build_window_binding_lookup(self._bindings)
         self._hint_chars = _compute_hint_chars(self._bindings)
 
     # -- Helpers --
@@ -329,6 +370,17 @@ class HintOverlay:
             AppHelper.callAfter(self.backspace)
             return None
 
+        # Handle pending window command (ctrl+w was pressed previously)
+        if self._window_cmd_pending:
+            self._window_cmd_pending = False
+            win_action = self._window_binding_lookup.get((code, ctrl))
+            if win_action:
+                handler = _WINDOW_ACTIONS.get(win_action)
+                if handler:
+                    AppHelper.callAfter(handler(self))
+                    return None
+            return event  # cancel, pass through
+
         shift = bool(flags & _SHIFT_FLAG)
         action = self._binding_lookup.get((code, ctrl, shift))
         repeat = bool(Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventAutorepeat))
@@ -372,8 +424,9 @@ class HintOverlay:
         elif action == "open_launcher":
             AppHelper.callAfter(self._open_launcher)
             return None
-        elif action == "cycle_window":
-            AppHelper.callAfter(self.cycle_window)
+        elif action == "window_prefix":
+            self._window_cmd_pending = True
+            AppHelper.callAfter(lambda: self.window._set_mode("WINDOW"))
             return None
         elif code in _KEYCODE_TO_CHAR and _KEYCODE_TO_CHAR[code].isalpha():
             char = _KEYCODE_TO_CHAR[code].upper()

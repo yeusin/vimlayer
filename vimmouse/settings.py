@@ -56,10 +56,10 @@ _KEYCODE_NAMES.update(_KEYCODE_LETTERS)
 
 # Human-readable labels for keybinding actions
 _ACTION_LABELS = {
-    "move_left": "Move Left",
-    "move_down": "Move Down",
-    "move_up": "Move Up",
-    "move_right": "Move Right",
+    "move_left": "Mouse Left",
+    "move_down": "Mouse Down",
+    "move_up": "Mouse Up",
+    "move_right": "Mouse Right",
     "scroll_up": "Scroll Up",
     "scroll_down": "Scroll Down",
     "toggle_hints": "Toggle Hints",
@@ -67,7 +67,26 @@ _ACTION_LABELS = {
     "insert_mode": "Insert Mode",
     "forward": "Forward",
     "back": "Back",
+    "right_click": "Right Click",
     "open_launcher": "App Launcher",
+    "window_prefix": "Window Cmd",
+    "win_cycle": "Win: Cycle",
+    "win_tile_1": "Win: Quarter \u2196",
+    "win_tile_2": "Win: Quarter \u2197",
+    "win_tile_3": "Win: Quarter \u2199",
+    "win_tile_4": "Win: Quarter \u2198",
+    "win_sixth_tl": "Win: Sixth \u2196",
+    "win_sixth_tc": "Win: Sixth \u2191",
+    "win_sixth_tr": "Win: Sixth \u2197",
+    "win_sixth_bl": "Win: Sixth \u2199",
+    "win_sixth_bc": "Win: Sixth \u2193",
+    "win_sixth_br": "Win: Sixth \u2198",
+    "win_half_left": "Win: Half Left",
+    "win_half_down": "Win: Half Bottom",
+    "win_half_up": "Win: Half Top",
+    "win_half_right": "Win: Half Right",
+    "win_center": "Win: Center",
+    "win_maximize": "Win: Maximize",
 }
 
 
@@ -84,8 +103,10 @@ def _format_binding(spec):
         return " / ".join(_format_binding(s) for s in spec)
     keycode = spec["keycode"]
     ctrl = spec.get("ctrl", False)
+    shift = spec.get("shift", False)
     name = _KEYCODE_NAMES.get(keycode, f"Key{keycode}")
-    return f"\u2303{name}" if ctrl else name
+    prefix = ("\u2303" if ctrl else "") + ("\u21e7" if shift else "")
+    return f"{prefix}{name}"
 
 
 class HotkeyRecorderField(NSTextField):
@@ -150,6 +171,7 @@ class KeyRecorderField(NSTextField):
         self._monitor = None
         self._keycode = None
         self._ctrl = False
+        self._shift = False
         self.setEditable_(False)
         self.setAlignment_(1)  # center
         return self
@@ -167,12 +189,16 @@ class KeyRecorderField(NSTextField):
             # Ignore modifier-only presses
             if keycode in (54, 55, 56, 57, 58, 59, 60, 61, 62, 63):
                 return event
-            ctrl = bool(event.modifierFlags() & Quartz.kCGEventFlagMaskControl)
+            mods = event.modifierFlags()
+            ctrl = bool(mods & Quartz.kCGEventFlagMaskControl)
+            shift = bool(mods & Quartz.kCGEventFlagMaskShift)
             field._keycode = keycode
             field._ctrl = ctrl
+            field._shift = shift
             field._stopRecording()
             name = _KEYCODE_NAMES.get(keycode, f"Key{keycode}")
-            field.setStringValue_(f"\u2303{name}" if ctrl else name)
+            prefix = ("\u2303" if ctrl else "") + ("\u21e7" if shift else "")
+            field.setStringValue_(f"{prefix}{name}")
             return None
 
         self._monitor = NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
@@ -241,8 +267,8 @@ class SettingsController(NSObject):
         content = w.contentView()
         y = win_h - 40  # current y, top-down
 
-        # --- Activation shortcut ---
-        label = NSTextField.labelWithString_("Activation Shortcut:")
+        # --- Normal mode shortcut ---
+        label = NSTextField.labelWithString_("Switch to Normal Mode:")
         label.setFrame_(NSMakeRect(15, y, 140, 20))
         content.addSubview_(label)
 
@@ -319,6 +345,7 @@ class SettingsController(NSObject):
         rec.setFont_(NSFont.systemFontOfSize_(12))
         rec._keycode = spec["keycode"]
         rec._ctrl = spec.get("ctrl", False)
+        rec._shift = spec.get("shift", False)
         rec.setStringValue_(_format_binding(spec))
         return rec
 
@@ -326,9 +353,26 @@ class SettingsController(NSObject):
         """Clear and rebuild all keybinding rows in the doc view."""
         for sub in list(self._doc_view.subviews()):
             sub.removeFromSuperview()
-        doc_h = len(self._actions) * _ROW_H
-        for i, action in enumerate(self._actions):
-            ry = doc_h - (i + 1) * _ROW_H + 5
+        # Count section headers (one before the first win_ action)
+        has_win_section = any(a.startswith("win_") for a in self._actions)
+        extra_rows = 1 if has_win_section else 0
+        doc_h = (len(self._actions) + extra_rows) * _ROW_H
+        self._doc_view.setFrameSize_((self._doc_view.frame().size.width, doc_h))
+        row_idx = 0
+        win_header_added = False
+        for action in self._actions:
+            # Insert section header before first win_ action
+            if action.startswith("win_") and not win_header_added:
+                win_header_added = True
+                ry = doc_h - (row_idx + 1) * _ROW_H + 5
+                sep = NSTextField.labelWithString_("After Window Cmd:")
+                sep.setFont_(NSFont.boldSystemFontOfSize_(11))
+                sep.setTextColor_(NSColor.secondaryLabelColor())
+                sep.setFrame_(NSMakeRect(5, ry, 250, 16))
+                self._doc_view.addSubview_(sep)
+                row_idx += 1
+            ry = doc_h - (row_idx + 1) * _ROW_H + 5
+            row_idx += 1
             # Action label
             lbl = NSTextField.labelWithString_(_ACTION_LABELS[action] + ":")
             lbl.setFrame_(NSMakeRect(5, ry, _LABEL_W, 20))
@@ -392,6 +436,8 @@ class SettingsController(NSObject):
                     entry = {"keycode": rec._keycode}
                     if rec._ctrl:
                         entry["ctrl"] = True
+                    if rec._shift:
+                        entry["shift"] = True
                     entries.append(entry)
             if not entries:
                 continue
