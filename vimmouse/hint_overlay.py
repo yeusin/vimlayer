@@ -432,6 +432,9 @@ class HintOverlay:
         elif action == "toggle_hints":
             AppHelper.callAfter(self.toggle_hints)
             return None
+        elif action == "toggle_all_hints":
+            AppHelper.callAfter(self.toggle_all_hints)
+            return None
         elif action == "open_launcher":
             AppHelper.callAfter(self._open_launcher)
             return None
@@ -838,6 +841,33 @@ class HintOverlay:
             self._hints_gen += 1
             gen = self._hints_gen
             AppHelper.callLater(2.0, lambda: self._auto_hide_hints(gen))
+
+    def toggle_all_hints(self):
+        """Show hints for all visible apps, or dismiss if already visible."""
+        log.info("toggle_all_hints visible=%s", self._hints_visible)
+        if self._hints_visible:
+            self._hide_all_labels()
+            self._hints_visible = False
+        else:
+            self._refresh_all()
+            self._hints_gen += 1
+            gen = self._hints_gen
+            AppHelper.callLater(4.0, lambda: self._auto_hide_hints(gen))
+
+    def _refresh_all(self):
+        """Collect clickable elements from all visible windows."""
+        windows = self._get_visible_windows()
+        pid_bounds = {}
+        for w in windows:
+            pid = w.get(Quartz.kCGWindowOwnerPID, 0)
+            b = w.get(Quartz.kCGWindowBounds, {})
+            bounds = (b.get("X", 0), b.get("Y", 0),
+                      b.get("Width", 0), b.get("Height", 0))
+            pid_bounds.setdefault(pid, []).append(bounds)
+        elements = accessibility.get_all_clickable_elements(pid_bounds)
+        if elements:
+            self._populate(elements)
+        self._hints_visible = True
 
     def _auto_hide_hints(self, gen):
         """Hide hints if no new toggle happened since gen."""

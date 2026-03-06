@@ -262,6 +262,24 @@ def get_clickable_elements(pid):
     return visible
 
 
+def get_all_clickable_elements(pid_bounds_map):
+    """Get clickable elements for multiple PIDs, filtered by their window bounds."""
+    all_elements = []
+    for pid, bounds_list in pid_bounds_map.items():
+        app_ref = AX.AXUIElementCreateApplication(pid)
+        candidates = _collect_clickable(app_ref)
+        for el in candidates:
+            ex, ey, ew, eh = _element_rect(el["position"], el["size"])
+            if ew < 10 or eh < 10:
+                continue
+            for bx, by, bw, bh in bounds_list:
+                if (ex + ew > bx and ex < bx + bw
+                        and ey + eh > by and ey < by + bh):
+                    all_elements.append(_enrich_element(el))
+                    break
+    return all_elements
+
+
 def search(query, elements):
     """Filter and rank elements by query. Returns sorted list of matches."""
     if not query:
