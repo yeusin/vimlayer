@@ -10,8 +10,8 @@ from ApplicationServices import (
 
 
 _MOUSE_S0 = 10        # base sensitivity (pixels per step)
-_MOUSE_STEP_MAX = 100  # cap on maximum step size
-_MOUSE_RAMP_FRAMES = 30  # frames to reach max speed
+_MOUSE_STEP_MAX = 75   # cap on maximum step size
+_MOUSE_RAMP_FRAMES = 25  # smooth ramp over ~25-30 events
 
 
 class MouseController:
@@ -21,20 +21,23 @@ class MouseController:
         self._last_move_time = 0
 
     def move_relative(self, dx, dy, repeat=False):
-        """Move the mouse cursor with acceleration. Maintains speed across direction changes."""
+        """Move the mouse cursor with smooth acceleration."""
         now = time.time()
-        # If the last move was recent (e.g. within 200ms), keep accelerating
-        # regardless of whether this specific key is a "repeat" event.
-        if now - self._last_move_time < 0.2:
+        
+        # If the last move was recent (within 300ms), we are in a movement session.
+        if now - self._last_move_time < 0.3:
+            # We continue the ramp smoothly without abrupt jumps.
             self._mouse_repeat_count = min(self._mouse_repeat_count + 1, _MOUSE_RAMP_FRAMES)
         else:
+            # Movement stopped for too long; reset to base speed.
             self._mouse_repeat_count = 0
-
+        
         self._last_move_time = now
 
+        # Calculate speed based on current ramp-up position
         t = self._mouse_repeat_count / _MOUSE_RAMP_FRAMES
-        # easeInOutCubic
-        ease = 4 * t ** 3 if t < 0.5 else 1 - (-2 * t + 2) ** 3 / 2
+        # Smoothstep (Cubic) acceleration for a more organic feel
+        ease = 3 * (t**2) - 2 * (t**3)
         step = int(_MOUSE_S0 + (_MOUSE_STEP_MAX - _MOUSE_S0) * ease)
 
         x, y = get_cursor_position()
