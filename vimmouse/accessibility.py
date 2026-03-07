@@ -1,8 +1,16 @@
 """AX tree querying and element matching."""
 
 import os
-import ApplicationServices as AX
+import objc
 import Quartz
+from ApplicationServices import (
+    AXUIElementCreateApplication,
+    AXUIElementCopyAttributeValue,
+    AXUIElementPerformAction,
+    AXValueGetValue,
+    kAXValueCGPointType,
+    kAXValueCGSizeType,
+)
 
 # Semantic keyword → (AXRole, AXSubrole) or custom matcher
 SEMANTIC_MAP = {
@@ -66,7 +74,7 @@ CLICKABLE_IF_PRESSABLE = {
 
 
 def _get_attr(element, attr):
-    err, value = AX.AXUIElementCopyAttributeValue(element, attr, None)
+    err, value = AXUIElementCopyAttributeValue(element, attr, None)
     if err == 0:
         return value
     return None
@@ -74,7 +82,7 @@ def _get_attr(element, attr):
 def is_element_stale(element):
     """Check if an AX element is no longer valid or visible."""
     # Try to fetch a basic attribute; if it fails, it's likely stale
-    err, _ = AX.AXUIElementCopyAttributeValue(element, "AXRole", None)
+    err, _ = AXUIElementCopyAttributeValue(element, "AXRole", None)
     if err != 0:
         return True
     return False
@@ -110,8 +118,8 @@ def _build_label(element, role):
 
 def _element_rect(position, size):
     """Unpack AXValue position/size into (x, y, w, h)."""
-    _, p = AX.AXValueGetValue(position, AX.kAXValueCGPointType, None)
-    _, s = AX.AXValueGetValue(size, AX.kAXValueCGSizeType, None)
+    _, p = AXValueGetValue(position, kAXValueCGPointType, None)
+    _, s = AXValueGetValue(size, kAXValueCGSizeType, None)
     return (p.x, p.y, s.width, s.height)
 
 
@@ -140,111 +148,41 @@ def _child_text(element, max_depth=3):
     return " ".join(p for p in parts if p)
 
 
-def _collect_elements(root, results, parent_clickable=False):
-    """Iteratively collect interactive elements from the AX tree."""
-    # Use an explicit stack to avoid hitting Python's recursion limit on deep
-    # web-content trees.
-    stack = [(root, parent_clickable)]
-    while stack:
-        element, par_click = stack.pop()
-
-        if _get_attr(element, "AXHidden"):
-            continue
-
-        role = _get_attr(element, "AXRole")
-        # Skip static text / images that are children of a clickable element (they're just labels)
-        if par_click and role in ("AXStaticText", "AXImage"):
-            continue
-
-        if _is_interactive(role, element):
-            if not _get_attr(element, "AXIsOffScreen"):
-                position = _get_attr(element, "AXPosition")
-                size = _get_attr(element, "AXSize")
-                if position is not None and size is not None:
-                    label, title, desc, value_str, subrole = _build_label(element, role)
-                    clickable = _is_clickable(role, element)
-                    # For clickable elements with no label, try to get text from children
-                    if not label and clickable:
-                        label = _child_text(element)
-                    # Exclude non-clickable elements with only a generic role as label
-                    if not label and not clickable:
-                        pass  # skip — no useful label and not clickable
-                    elif label or clickable:
-                        if not label:
-                            label = role or "?"
-                        results.append(
-                            {
-                                "element": element,
-                                "role": role or "",
-                                "subrole": subrole,
-                                "title": title,
-                                "description": desc,
-                                "value": value_str,
-                                "label": label,
-                                "position": position,
-                                "size": size,
-                                "clickable": clickable,
-                            }
-                        )
-
-        clickable = _is_clickable(role, element) if role else False
-        children = _get_attr(element, "AXVisibleChildren")
-        if children is None:
-            children = _get_attr(element, "AXChildren")
-        if children:
-            child_click = clickable or par_click
-            # Reverse so we process children in original order (stack is LIFO)
-            for child in reversed(children):
-                stack.append((child, child_click))
-
-
-def get_elements(pid):
-    """Walk the AX tree for the given PID and return interactive elements."""
-    app_ref = AX.AXUIElementCreateApplication(pid)
-    results = []
-    _collect_elements(app_ref, results)
-    return results
-
-
-def _get_visible_bounds(pid):
-    """Return (x, y, w, h) of the focused window frame for the given PID."""
-    app_ref = AX.AXUIElementCreateApplication(pid)
-    focused = _get_attr(app_ref, "AXFocusedWindow")
-    if focused is None:
-        return None
-
-    pos = _get_attr(focused, "AXPosition")
-    size = _get_attr(focused, "AXSize")
-    if pos is None or size is None:
-        return None
-    return _element_rect(pos, size)
-
-
 def _collect_clickable(root):
     """Fast collection: only gather clickable element refs with position/size."""
     results = []
-    stack = [root]
+    stack = [(root, None)]  # (element, clickable_ancestor)
     while stack:
-        element = stack.pop()
+        element, clickable_ancestor = stack.pop()
 
         if _get_attr(element, "AXHidden"):
             continue
 
         role = _get_attr(element, "AXRole")
-        if role and _is_clickable(role, element):
-            if not _get_attr(element, "AXIsOffScreen"):
-                position = _get_attr(element, "AXPosition")
-                size = _get_attr(element, "AXSize")
-                if position is not None and size is not None:
-                    results.append({"element": element, "role": role,
-                                    "position": position, "size": size})
+        is_clickable = _is_clickable(role, element) if role else False
+        
+        # Determine if we should consider this element as a candidate
+        # 1. It is directly clickable
+        # 2. It's a child of a clickable element and might be the one providing the size
+        effective_clickable = is_clickable or (clickable_ancestor is not None)
 
-        children = _get_attr(element, "AXVisibleChildren")
-        if children is None:
-            children = _get_attr(element, "AXChildren")
+        if role and effective_clickable:
+            # We used to check AXIsOffScreen here, but it's unreliable in Chrome.
+            # We filter by window bounds and occlusion later anyway.
+            position = _get_attr(element, "AXPosition")
+            size = _get_attr(element, "AXSize")
+            if position is not None and size is not None:
+                results.append({"element": element, "role": role,
+                                "position": position, "size": size,
+                                "is_direct": is_clickable})
+
+        # Traverse children
+        # Prefer AXChildren over AXVisibleChildren as the latter can be too aggressive in pruning.
+        children = _get_attr(element, "AXChildren")
         if children:
+            new_ancestor = element if is_clickable else clickable_ancestor
             for child in reversed(children):
-                stack.append(child)
+                stack.append((child, new_ancestor))
     return results
 
 
@@ -258,7 +196,7 @@ def _enrich_element(el):
     if not label:
         label = role or "?"
     el.update({"subrole": subrole, "title": title, "description": desc,
-               "value": value_str, "label": label, "clickable": True})
+               "value": value_str, "label": label, "clickable": el.get("is_direct", True)})
     return el
 
 
@@ -270,14 +208,26 @@ def _get_on_screen_windows():
     )
 
 
+def _get_visible_bounds(pid):
+    """Return (x, y, w, h) of the focused window frame for the given PID."""
+    app_ref = AXUIElementCreateApplication(pid)
+    focused = _get_attr(app_ref, "AXFocusedWindow")
+    if focused is None:
+        return None
+
+    pos = _get_attr(focused, "AXPosition")
+    size = _get_attr(focused, "AXSize")
+    if pos is None or size is None:
+        return None
+    return _element_rect(pos, size)
+
+
 def _is_element_covered(ex, ey, ew, eh, pid, win_list):
     """Check if the element's center point is covered by a window in front of it."""
     cx, cy = ex + ew / 2, ey + eh / 2
     my_pid = os.getpid()
 
     # The win_list is front-to-back.
-    # Scan until we find the window belonging to this PID that contains the center point.
-    # Any window BEFORE that one in the list is in front.
     for w in win_list:
         w_pid = w.get(Quartz.kCGWindowOwnerPID, 0)
         if w_pid == my_pid:
@@ -294,12 +244,13 @@ def _is_element_covered(ex, ey, ew, eh, pid, win_list):
         # Check if this window contains the point
         if wx <= cx <= wx + ww and wy <= cy <= wy + wh:
             if w_pid == pid:
-                # We found the target window (or another window of the same app) in front.
-                # Since the list is front-to-back, anything after this is behind.
+                # Target app's window is in front. We assume it's the one we're interested in.
                 return False
             else:
-                # This window is in front of our target and covers the point.
-                # Only consider normal windows (layer 0) as occluders.
+                # Another app's window is in front. 
+                # Ignore very small windows (likely tooltips or overlays)
+                if ww < 50 or wh < 50:
+                    continue
                 if layer == 0:
                     return True
 
@@ -308,7 +259,7 @@ def _is_element_covered(ex, ey, ew, eh, pid, win_list):
 
 def get_clickable_elements(pid):
     """Get only clickable elements actually visible on screen."""
-    app_ref = AX.AXUIElementCreateApplication(pid)
+    app_ref = AXUIElementCreateApplication(pid)
     candidates = _collect_clickable(app_ref)
 
     bounds = _get_visible_bounds(pid)
@@ -319,14 +270,27 @@ def get_clickable_elements(pid):
     win_list = _get_on_screen_windows()
 
     visible = []
+    # Deduplicate elements by position/size to avoid double-hinting
+    seen_rects = set()
+
     for el in candidates:
         ex, ey, ew, eh = _element_rect(el["position"], el["size"])
-        if ew < 10 or eh < 10:
+        
+        # Lower threshold for small clickable items (like icons)
+        if ew < 4 or eh < 4:
             continue
+            
         # Check window bounds first (fast)
         if not (ex + ew > bx and ex < bx + bw
                 and ey + eh > by and ey < by + bh):
             continue
+
+        # Deduplication: if we've already seen an element with almost exactly this rect,
+        # it's likely a child/parent pair representing the same clickable area.
+        rect_key = (int(ex), int(ey), int(ew), int(eh))
+        if rect_key in seen_rects:
+            continue
+        seen_rects.add(rect_key)
 
         # Check occlusion by other windows (slower)
         if _is_element_covered(ex, ey, ew, eh, pid, win_list):
@@ -343,11 +307,13 @@ def get_all_clickable_elements(pid_bounds_map):
     win_list = _get_on_screen_windows()
 
     for pid, bounds_list in pid_bounds_map.items():
-        app_ref = AX.AXUIElementCreateApplication(pid)
+        app_ref = AXUIElementCreateApplication(pid)
         candidates = _collect_clickable(app_ref)
+        
+        seen_rects = set()
         for el in candidates:
             ex, ey, ew, eh = _element_rect(el["position"], el["size"])
-            if ew < 10 or eh < 10:
+            if ew < 4 or eh < 4:
                 continue
 
             # Within bounds of any of its app windows?
@@ -360,6 +326,11 @@ def get_all_clickable_elements(pid_bounds_map):
 
             if not in_any_bounds:
                 continue
+
+            rect_key = (int(ex), int(ey), int(ew), int(eh))
+            if rect_key in seen_rects:
+                continue
+            seen_rects.add(rect_key)
 
             # Check occlusion
             if _is_element_covered(ex, ey, ew, eh, pid, win_list):
