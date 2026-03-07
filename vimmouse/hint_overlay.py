@@ -62,6 +62,14 @@ _KEY_BACKSPACE = 51
 _CTRL_FLAG = 1 << 18   # NSEventModifierFlagControl
 _SHIFT_FLAG = 1 << 17  # NSEventModifierFlagShift
 
+# Navigation and control keys to be blocked in normal mode
+_NAV_KEYCODES = {
+    123, 124, 125, 126,  # Arrows (Left, Right, Down, Up)
+    116, 121,            # Page Up, Page Down
+    115, 119,            # Home, End
+    117,                 # Forward Delete
+}
+
 _ALL_ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
@@ -367,10 +375,20 @@ class HintOverlay:
             AppHelper.callAfter(self._cheat_sheet.hide)
             return None
 
-        if code in _KEYCODE_TO_CHAR:
-            if self._hints_visible:
+        # Block and show overlay for Normal Mode keys (navigation and alphanumeric)
+        is_nav = code in _NAV_KEYCODES
+        is_char = code in _KEYCODE_TO_CHAR
+        
+        if is_nav or is_char:
+            if is_char and self._hints_visible:
                 char = _KEYCODE_TO_CHAR[code].upper()
-                AppHelper.callAfter(lambda c=char: self.type_char(c))
+                # Hint chars are letters only. Non-alpha keys (space/tab/return) still show overlay if not bound.
+                if char in _ALL_ALPHA:
+                    AppHelper.callAfter(lambda c=char: self.type_char(c))
+                    return None
+            
+            # Show "NORMAL" watermark for any other blocked navigation/alphanumeric key
+            AppHelper.callAfter(lambda: self._watermark.set_mode("NORMAL"))
             return None
 
         return event
