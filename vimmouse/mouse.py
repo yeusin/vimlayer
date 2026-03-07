@@ -9,9 +9,10 @@ from ApplicationServices import (
 )
 
 
-_MOUSE_S0 = 10        # base sensitivity (pixels per step)
-_MOUSE_STEP_MAX = 75   # cap on maximum step size
-_MOUSE_RAMP_FRAMES = 25  # smooth ramp over ~25-30 events
+_MOUSE_S0 = 4         # base sensitivity (pixels per step)
+_MOUSE_STEP_MAX = 100  # cap on maximum step size
+_MOUSE_RAMP_FRAMES = 20  # smooth ramp over ~20 events
+_MOUSE_TIMEOUT = 0.15  # session timeout for acceleration reset (seconds)
 
 
 class MouseController:
@@ -19,20 +20,30 @@ class MouseController:
     def __init__(self):
         self._mouse_repeat_count = 0
         self._last_move_time = 0
+        self._last_dx = 0
+        self._last_dy = 0
 
     def move_relative(self, dx, dy, repeat=False, dragging=False):
         """Move the mouse cursor with smooth acceleration."""
         now = time.time()
 
-        # If the last move was recent (within 300ms), we are in a movement session.
-        if now - self._last_move_time < 0.3:
+        # Reset acceleration if:
+        # 1. Too much time passed since last move
+        # 2. The direction changed significantly (reversing on either axis)
+        # 3. This is a new key press (not a repeat)
+        direction_reversed = (dx != 0 and self._last_dx != 0 and (dx > 0) != (self._last_dx > 0)) or \
+                             (dy != 0 and self._last_dy != 0 and (dy > 0) != (self._last_dy > 0))
+
+        if repeat and (now - self._last_move_time < _MOUSE_TIMEOUT) and not direction_reversed:
             # We continue the ramp smoothly without abrupt jumps.
             self._mouse_repeat_count = min(self._mouse_repeat_count + 1, _MOUSE_RAMP_FRAMES)
         else:
-            # Movement stopped for too long; reset to base speed.
+            # New press, stop, or change direction; reset to base speed.
             self._mouse_repeat_count = 0
 
         self._last_move_time = now
+        self._last_dx = dx
+        self._last_dy = dy
 
         # Calculate speed based on current ramp-up position
         t = self._mouse_repeat_count / _MOUSE_RAMP_FRAMES
