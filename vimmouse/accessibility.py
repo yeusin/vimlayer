@@ -1,6 +1,7 @@
 """AX tree querying and element matching."""
 
 import os
+from typing import Any, Dict, List, Optional, Tuple, Union
 import objc
 import Quartz
 from ApplicationServices import (
@@ -13,7 +14,7 @@ from ApplicationServices import (
 )
 
 # Semantic keyword → (AXRole, AXSubrole) or custom matcher
-SEMANTIC_MAP = {
+SEMANTIC_MAP: Dict[str, Tuple[str, str]] = {
     "close": ("AXButton", "AXCloseButton"),
     "minimize": ("AXButton", "AXMinimizeButton"),
     "maximize": ("AXButton", "AXZoomButton"),
@@ -73,13 +74,13 @@ CLICKABLE_IF_PRESSABLE = {
 }
 
 
-def _get_attr(element, attr):
+def _get_attr(element: Any, attr: str) -> Any:
     err, value = AXUIElementCopyAttributeValue(element, attr, None)
     if err == 0:
         return value
     return None
 
-def is_element_stale(element):
+def is_element_stale(element: Any) -> bool:
     """Check if an AX element is no longer valid or visible."""
     # Try to fetch a basic attribute; if it fails, it's likely stale
     err, _ = AXUIElementCopyAttributeValue(element, "AXRole", None)
@@ -87,7 +88,7 @@ def is_element_stale(element):
         return True
     return False
 
-def _is_clickable(role, element):
+def _is_clickable(role: str, element: Any) -> bool:
     """Check if an element can be clicked."""
     if role in ALWAYS_CLICKABLE:
         return True
@@ -95,7 +96,7 @@ def _is_clickable(role, element):
     return bool(actions and "AXPress" in actions)
 
 
-def _is_interactive(role, element):
+def _is_interactive(role: str, element: Any) -> bool:
     """Check if an element is interactive based on role and actions."""
     if role in INTERACTIVE_ROLES:
         return True
@@ -104,7 +105,7 @@ def _is_interactive(role, element):
     return False
 
 
-def _build_label(element, role):
+def _build_label(element: Any, role: str) -> Tuple[str, str, str, str, str]:
     """Assemble a display label from an element's attributes."""
     title = _get_attr(element, "AXTitle") or ""
     desc = _get_attr(element, "AXDescription") or ""
@@ -116,14 +117,14 @@ def _build_label(element, role):
     return label, title, desc, value_str, subrole
 
 
-def _element_rect(position, size):
+def _element_rect(position: Any, size: Any) -> Tuple[float, float, float, float]:
     """Unpack AXValue position/size into (x, y, w, h)."""
     _, p = AXValueGetValue(position, kAXValueCGPointType, None)
     _, s = AXValueGetValue(size, kAXValueCGSizeType, None)
     return (p.x, p.y, s.width, s.height)
 
 
-def _child_text(element, max_depth=3):
+def _child_text(element: Any, max_depth: int = 3) -> str:
     """Gather visible text from children (for labeling clickable containers)."""
     if max_depth <= 0:
         return ""
@@ -148,7 +149,7 @@ def _child_text(element, max_depth=3):
     return " ".join(p for p in parts if p)
 
 
-def _collect_clickable(root):
+def _collect_clickable(root: Any) -> List[Dict[str, Any]]:
     """Fast collection: only gather clickable element refs with position/size."""
     results = []
     stack = [(root, None)]  # (element, clickable_ancestor)
@@ -181,7 +182,7 @@ def _collect_clickable(root):
     return results
 
 
-def _enrich_element(el):
+def _enrich_element(el: Dict[str, Any]) -> Dict[str, Any]:
     """Fetch full label info for a verified visible element."""
     element = el["element"]
     role = el["role"]
@@ -195,7 +196,7 @@ def _enrich_element(el):
     return el
 
 
-def _get_on_screen_windows():
+def _get_on_screen_windows() -> List[Dict[str, Any]]:
     """Get all on-screen windows in front-to-back order (Quartz)."""
     return Quartz.CGWindowListCopyWindowInfo(
         Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
@@ -203,7 +204,7 @@ def _get_on_screen_windows():
     )
 
 
-def _get_visible_bounds(pid):
+def _get_visible_bounds(pid: int) -> Optional[Tuple[float, float, float, float]]:
     """Return (x, y, w, h) of the focused window frame for the given PID."""
     app_ref = AXUIElementCreateApplication(pid)
     focused = _get_attr(app_ref, "AXFocusedWindow")
@@ -217,7 +218,7 @@ def _get_visible_bounds(pid):
     return _element_rect(pos, size)
 
 
-def _is_element_covered(ex, ey, ew, eh, pid, win_list):
+def _is_element_covered(ex: float, ey: float, ew: float, eh: float, pid: int, win_list: List[Dict[str, Any]]) -> bool:
     """Check if the element's center point is covered by a window in front of it."""
     cx, cy = ex + ew / 2, ey + eh / 2
     my_pid = os.getpid()
@@ -252,7 +253,7 @@ def _is_element_covered(ex, ey, ew, eh, pid, win_list):
     return False
 
 
-def get_clickable_elements(pid):
+def get_clickable_elements(pid: int) -> List[Dict[str, Any]]:
     """Get only clickable elements actually visible on screen."""
     app_ref = AXUIElementCreateApplication(pid)
     candidates = _collect_clickable(app_ref)
@@ -293,7 +294,7 @@ def get_clickable_elements(pid):
     ))
     
     final_visible = []
-    seen_centers = []
+    seen_centers: List[Tuple[float, float]] = []
     
     for el in visible:
         ex, ey, ew, eh = _element_rect(el["position"], el["size"])
@@ -311,7 +312,7 @@ def get_clickable_elements(pid):
     return final_visible
 
 
-def get_all_clickable_elements(pid_bounds_map):
+def get_all_clickable_elements(pid_bounds_map: Dict[int, List[Tuple[float, float, float, float]]]) -> List[Dict[str, Any]]:
     """Get clickable elements for multiple PIDs, filtered by their window bounds."""
     all_elements = []
     win_list = _get_on_screen_windows()
@@ -349,7 +350,7 @@ def get_all_clickable_elements(pid_bounds_map):
             x["role"] not in ALWAYS_CLICKABLE
         ))
         
-        seen_centers = []
+        seen_centers: List[Tuple[float, float]] = []
         for el in visible:
             ex, ey, ew, eh = _element_rect(el["position"], el["size"])
             cx, cy = ex + ew / 2, ey + eh / 2
@@ -366,7 +367,7 @@ def get_all_clickable_elements(pid_bounds_map):
     return all_elements
 
 
-def search(query, elements):
+def search(query: str, elements: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Filter and rank elements by query. Returns sorted list of matches."""
     if not query:
         return elements
@@ -387,7 +388,7 @@ def search(query, elements):
     return [el for _, el in scored]
 
 
-def _score_element(el, query_lower, semantic):
+def _score_element(el: Dict[str, Any], query_lower: str, semantic: Optional[Tuple[str, str]]) -> int:
     """Score an element against the query. 0 = no match."""
     # Semantic match (highest priority)
     if semantic:
@@ -430,7 +431,7 @@ def _score_element(el, query_lower, semantic):
     return score
 
 
-def _subsequence_match(query, text):
-    """Check if all chars in query appear in text in order."""
-    it = iter(text)
-    return all(c in it for c in query)
+def _subsequence_match(query: str, text: str) -> bool:
+    """Check if all chars in query appear in text in order (case-insensitive)."""
+    it = iter(text.lower())
+    return all(c.lower() in it for c in query)

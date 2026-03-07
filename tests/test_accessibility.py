@@ -1,0 +1,39 @@
+import pytest
+from vimmouse import accessibility
+
+def test_subsequence_match():
+    assert accessibility._subsequence_match("abc", "apple banana cherry")
+    assert accessibility._subsequence_match("save", "Save Document")
+    assert not accessibility._subsequence_match("save", "sv")
+    assert not accessibility._subsequence_match("xyz", "abcde")
+
+def test_score_element_semantic():
+    el = {"role": "AXButton", "subrole": "AXCloseButton", "title": "", "description": "", "value": "", "clickable": True}
+    score = accessibility._score_element(el, "close", ("AXButton", "AXCloseButton"))
+    assert score == 100
+
+def test_score_element_text():
+    el = {"role": "AXButton", "subrole": "", "title": "Save Changes", "description": "", "value": "", "clickable": True}
+    
+    # Exact match (case-insensitive because query is already lowercased)
+    assert accessibility._score_element(el, "save changes", None) >= 90
+    # Startswith
+    assert accessibility._score_element(el, "save", None) >= 70
+    # Substring
+    assert accessibility._score_element(el, "changes", None) >= 50
+    # Fuzzy
+    assert accessibility._score_element(el, "sc", None) >= 20
+
+def test_search():
+    elements = [
+        {"role": "AXButton", "subrole": "", "title": "Submit", "description": "", "value": "", "clickable": True},
+        {"role": "AXButton", "subrole": "", "title": "Cancel", "description": "", "value": "", "clickable": True},
+    ]
+    
+    results = accessibility.search("sub", elements)
+    assert len(results) == 1
+    assert results[0]["title"] == "Submit"
+    
+    results = accessibility.search("cel", elements) # fuzzy
+    assert len(results) == 1
+    assert results[0]["title"] == "Cancel"

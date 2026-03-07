@@ -1,6 +1,7 @@
 """Cursor movement and click simulation via CGEvent."""
 
 import time
+from typing import Tuple, Any
 import Quartz
 from ApplicationServices import (
     kAXValueCGPointType,
@@ -17,13 +18,13 @@ _MOUSE_TIMEOUT = 0.15  # session timeout for acceleration reset (seconds)
 
 class MouseController:
     """Manages mouse state, including acceleration for keyboard-driven movement."""
-    def __init__(self):
+    def __init__(self) -> None:
         self._mouse_repeat_count = 0
-        self._last_move_time = 0
+        self._last_move_time = 0.0
         self._last_dx = 0
         self._last_dy = 0
 
-    def move_relative(self, dx, dy, repeat=False, dragging=False):
+    def move_relative(self, dx: int, dy: int, repeat: bool = False, dragging: bool = False) -> None:
         """Move the mouse cursor with smooth acceleration."""
         now = time.time()
 
@@ -51,18 +52,22 @@ class MouseController:
         ease = 3 * (t**2) - 2 * (t**3)
         step = int(_MOUSE_S0 + (_MOUSE_STEP_MAX - _MOUSE_S0) * ease)
 
-        x, y = get_cursor_position()
-        move_cursor(x + dx * step, y + dy * step, dragging=dragging)
+        pos = get_cursor_position()
+        if pos:
+            x, y = pos
+            move_cursor(x + dx * step, y + dy * step, dragging=dragging)
 
 
-def get_cursor_position():
+def get_cursor_position() -> Tuple[float, float]:
     """Return the current cursor position as (x, y)."""
     event = Quartz.CGEventCreate(None)
+    if not event:
+        return 0.0, 0.0
     point = Quartz.CGEventGetLocation(event)
     return point.x, point.y
 
 
-def move_cursor(x, y, dragging=False):
+def move_cursor(x: float, y: float, dragging: bool = False) -> None:
     """Move the mouse cursor to (x, y), clamped to screen bounds."""
     w = Quartz.CGDisplayPixelsWide(Quartz.CGMainDisplayID())
     h = Quartz.CGDisplayPixelsHigh(Quartz.CGMainDisplayID())
@@ -73,10 +78,11 @@ def move_cursor(x, y, dragging=False):
     event = Quartz.CGEventCreateMouseEvent(
         None, event_type, point, Quartz.kCGMouseButtonLeft
     )
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
+    if event:
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
 
 
-def click(x, y):
+def click(x: float, y: float) -> None:
     """Click at (x, y) by posting mouse down + up events."""
     move_cursor(x, y)
     point = Quartz.CGPointMake(x, y)
@@ -86,31 +92,35 @@ def click(x, y):
     up = Quartz.CGEventCreateMouseEvent(
         None, Quartz.kCGEventLeftMouseUp, point, Quartz.kCGMouseButtonLeft
     )
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
+    if down:
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
+    if up:
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
 
 
-def mouse_down(x, y):
+def mouse_down(x: float, y: float) -> None:
     """Press and hold left mouse button at (x, y)."""
     move_cursor(x, y)
     point = Quartz.CGPointMake(x, y)
     down = Quartz.CGEventCreateMouseEvent(
         None, Quartz.kCGEventLeftMouseDown, point, Quartz.kCGMouseButtonLeft
     )
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
+    if down:
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
 
 
-def mouse_up(x, y):
+def mouse_up(x: float, y: float) -> None:
     """Release left mouse button at (x, y)."""
     move_cursor(x, y)
     point = Quartz.CGPointMake(x, y)
     up = Quartz.CGEventCreateMouseEvent(
         None, Quartz.kCGEventLeftMouseUp, point, Quartz.kCGMouseButtonLeft
     )
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
+    if up:
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
 
 
-def right_click(x, y):
+def right_click(x: float, y: float) -> None:
     """Right-click at (x, y) by posting right mouse down + up events."""
     move_cursor(x, y)
     point = Quartz.CGPointMake(x, y)
@@ -120,49 +130,60 @@ def right_click(x, y):
     up = Quartz.CGEventCreateMouseEvent(
         None, Quartz.kCGEventRightMouseUp, point, Quartz.kCGMouseButtonRight
     )
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
+    if down:
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
+    if up:
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
 
 
-def back_button():
+def back_button() -> None:
     """Simulate mouse back button (button 3) press."""
-    pos = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
+    event = Quartz.CGEventCreate(None)
+    if not event:
+        return
+    pos = Quartz.CGEventGetLocation(event)
     down = Quartz.CGEventCreateMouseEvent(
         None, Quartz.kCGEventOtherMouseDown, pos, 3
     )
     up = Quartz.CGEventCreateMouseEvent(
         None, Quartz.kCGEventOtherMouseUp, pos, 3
     )
-    Quartz.CGEventSetIntegerValueField(down, Quartz.kCGMouseEventButtonNumber, 3)
-    Quartz.CGEventSetIntegerValueField(up, Quartz.kCGMouseEventButtonNumber, 3)
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
+    if down and up:
+        Quartz.CGEventSetIntegerValueField(down, Quartz.kCGMouseEventButtonNumber, 3)
+        Quartz.CGEventSetIntegerValueField(up, Quartz.kCGMouseEventButtonNumber, 3)
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
 
 
-def forward_button():
+def forward_button() -> None:
     """Simulate mouse forward button (button 4) press."""
-    pos = Quartz.CGEventGetLocation(Quartz.CGEventCreate(None))
+    event = Quartz.CGEventCreate(None)
+    if not event:
+        return
+    pos = Quartz.CGEventGetLocation(event)
     down = Quartz.CGEventCreateMouseEvent(
         None, Quartz.kCGEventOtherMouseDown, pos, 4
     )
     up = Quartz.CGEventCreateMouseEvent(
         None, Quartz.kCGEventOtherMouseUp, pos, 4
     )
-    Quartz.CGEventSetIntegerValueField(down, Quartz.kCGMouseEventButtonNumber, 4)
-    Quartz.CGEventSetIntegerValueField(up, Quartz.kCGMouseEventButtonNumber, 4)
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
+    if down and up:
+        Quartz.CGEventSetIntegerValueField(down, Quartz.kCGMouseEventButtonNumber, 4)
+        Quartz.CGEventSetIntegerValueField(up, Quartz.kCGMouseEventButtonNumber, 4)
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, down)
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, up)
 
 
-def scroll(lines):
+def scroll(lines: int) -> None:
     """Scroll vertically. Positive = up, negative = down."""
     event = Quartz.CGEventCreateScrollWheelEvent(
         None, Quartz.kCGScrollEventUnitLine, 1, lines
     )
-    Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
+    if event:
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
 
 
-def element_center(position, size):
+def element_center(position: Any, size: Any) -> Tuple[float, float]:
     """Return (cx, cy) center point given AXValue position and size."""
     err, pos = AXValueGetValue(position, kAXValueCGPointType, None)
     err, sz = AXValueGetValue(size, kAXValueCGSizeType, None)

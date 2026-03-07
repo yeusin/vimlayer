@@ -2,17 +2,21 @@
 
 import json
 import os
+from typing import Any, Dict, Union, List
 
 import Quartz
 
 _CONFIG_PATH = os.path.expanduser("~/.config/vimmouse/config.json")
 
-_DEFAULTS = {
+_DEFAULTS: Dict[str, Any] = {
     "keycode": 49,  # Space
     "flags": Quartz.kCGEventFlagMaskCommand | Quartz.kCGEventFlagMaskShift,
 }
 
-_DEFAULT_KEYBINDINGS = {
+BindingSpec = Dict[str, Union[int, bool]]
+BindingEntry = Union[BindingSpec, List[BindingSpec]]
+
+_DEFAULT_KEYBINDINGS: Dict[str, BindingEntry] = {
     "move_left": {"keycode": 4},            # h
     "move_down": {"keycode": 38},           # j
     "move_up": {"keycode": 40},             # k
@@ -49,12 +53,12 @@ _DEFAULT_KEYBINDINGS = {
 }
 
 
-def default_keybindings():
+def default_keybindings() -> Dict[str, BindingEntry]:
     """Return a deep copy of the default keybindings."""
     return json.loads(json.dumps(_DEFAULT_KEYBINDINGS))
 
 
-def load():
+def load() -> Dict[str, Any]:
     """Read config from disk, returning defaults if missing or invalid."""
     try:
         with open(_CONFIG_PATH) as f:
@@ -63,7 +67,7 @@ def load():
         return dict(_DEFAULTS)
 
 
-def load_keybindings():
+def load_keybindings() -> Dict[str, BindingEntry]:
     """Return merged keybindings (defaults + user overrides)."""
     bindings = default_keybindings()
     data = load()
@@ -73,7 +77,7 @@ def load_keybindings():
     return bindings
 
 
-def save(data):
+def save(data: Dict[str, Any]) -> None:
     """Write config dict to disk."""
     os.makedirs(os.path.dirname(_CONFIG_PATH), exist_ok=True)
     with open(_CONFIG_PATH, "w") as f:
