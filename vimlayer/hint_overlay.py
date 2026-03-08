@@ -30,6 +30,20 @@ from .window_manager import WindowManager
 
 log = logging.getLogger(__name__)
 
+# Private API: _AXUIElementGetWindow(AXUIElementRef, CGWindowID *) -> AXError
+# Used to map an AXUIElement window to its CGWindowID for precise window raising.
+try:
+    _hi_bundle = objc.loadBundle(
+        "HIServices", {},
+        bundle_path="/System/Library/Frameworks/ApplicationServices.framework/"
+                    "Frameworks/HIServices.framework",
+    )
+    _fn = {}
+    objc.loadBundleFunctions(_hi_bundle, _fn, [("_AXUIElementGetWindow", b"l@o^I")])
+    _AXUIElementGetWindow = _fn["_AXUIElementGetWindow"]
+except (ImportError, KeyError, AttributeError):
+    _AXUIElementGetWindow = None
+
 # Hint label style
 HINT_FONT_SIZE = 12
 HINT_BG_COLOR = (0.15, 0.15, 0.15, 0.85)  # dark gray
@@ -1156,7 +1170,8 @@ class HintOverlay:
             app.activateWithOptions_(0)
             self._pid = pid
         bounds = win_info[Quartz.kCGWindowBounds]
-        self._raise_window(pid, bounds)
+        wid = win_info.get(Quartz.kCGWindowNumber, 0)
+        self._raise_window(pid, bounds, wid)
         mouse.move_cursor(bounds["X"] + bounds["Width"] / 2,
                           bounds["Y"] + bounds["Height"] / 2)
         # Clear snapshot after 2s of no cycling
@@ -1181,10 +1196,17 @@ class HintOverlay:
         if app:
             app.activateWithOptions_(0)
             self._pid = pid
-        self._raise_window(pid, bounds)
+        wid = win_info.get(Quartz.kCGWindowNumber, 0)
+        self._raise_window(pid, bounds, wid)
 
-    def _raise_window(self, pid, bounds):
-        """Raise a specific window by matching its position/size via Accessibility."""
+    def _raise_window(self, pid, bounds, target_wid=0):
+        """Raise a specific window by matching its position/size via Accessibility.
+
+        When *target_wid* (a CGWindowNumber) is provided we first try to match
+        by window-ID using the private _AXUIElementGetWindow helper, which
+        avoids ambiguity when two windows share identical bounds.  Falls back to
+        bounds matching when the window-ID lookup is unavailable or fails.
+        """
         app_ref = AX.AXUIElementCreateApplication(pid)
         err, windows = AX.AXUIElementCopyAttributeValue(app_ref, "AXWindows", None)
         if err != 0 or not windows:
@@ -1192,8 +1214,19 @@ class HintOverlay:
             return
         tx, ty = bounds["X"], bounds["Y"]
         tw, th = bounds["Width"], bounds["Height"]
-        log.info("_raise_window: looking for (%.0f,%.0f,%.0f,%.0f) among %d AXWindows",
-                 tx, ty, tw, th, len(windows))
+        log.info("_raise_window: looking for wid=%s (%.0f,%.0f,%.0f,%.0f) among %d AXWindows",
+                 target_wid, tx, ty, tw, th, len(windows))
+
+        # --- Try matching by CGWindowNumber first (precise) ---
+        if target_wid and _AXUIElementGetWindow is not None:
+            for i, win in enumerate(windows):
+                err, ax_wid = _AXUIElementGetWindow(win, None)
+                if err == 0 and ax_wid == target_wid:
+                    AX.AXUIElementPerformAction(win, "AXRaise")
+                    log.info("  [%d] MATCHED by wid=%s — raised", i, ax_wid)
+                    return
+
+        # --- Fallback: match by bounds ---
         for i, win in enumerate(windows):
             err, pos = AX.AXUIElementCopyAttributeValue(win, "AXPosition", None)
             _, size = AX.AXUIElementCopyAttributeValue(win, "AXSize", None)
@@ -1205,6 +1238,6 @@ class HintOverlay:
             log.info("  [%d] pos=(%.0f,%.0f) size=(%.0f,%.0f)", i, p.x, p.y, s.width, s.height)
             if abs(p.x - tx) < 2 and abs(p.y - ty) < 2 and abs(s.width - tw) < 2 and abs(s.height - th) < 2:
                 AX.AXUIElementPerformAction(win, "AXRaise")
-                log.info("  [%d] MATCHED — raised", i)
+                log.info("  [%d] MATCHED by bounds — raised", i)
                 return
         log.info("_raise_window: no match found")
