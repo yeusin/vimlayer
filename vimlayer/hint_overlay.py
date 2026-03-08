@@ -395,9 +395,12 @@ class HintOverlay:
         if cmd and not ctrl:
             return event
             
-        # Block Escape and reset typing
+        # Block Escape and reset typing or drag
         if code == _KEY_ESCAPE:
-            AppHelper.callAfter(self.reset_typing)
+            if self._dragging:
+                AppHelper.callAfter(self.toggle_drag)
+            else:
+                AppHelper.callAfter(self.reset_typing)
             return None
 
         if code == _KEY_BACKSPACE:
@@ -740,10 +743,20 @@ class HintOverlay:
             log.info("drag: start (%.0f, %.0f)", x, y)
             mouse.mouse_down(x, y)
             self._dragging = True
+            self._notify_mode("D")
+            self._watermark.set_mode("DRAG")
         else:
             log.info("drag: end (%.0f, %.0f)", x, y)
             mouse.mouse_up(x, y)
             self._dragging = False
+            self._notify_mode("N")
+            self._watermark.set_mode("NORMAL")
+            
+        if self._hints_visible:
+            self._hide_all_labels()
+            self._hints_visible = False
+            self.typed = ""
+        self._hints_gen += 1
 
     def right_click_at_cursor(self):
         """Right-click at the current cursor position, then dismiss hints."""
@@ -1029,13 +1042,19 @@ class HintOverlay:
         log.info("mode: NORMAL")
         self._insert_mode = False
         self._auto_insert = False
-        self._notify_mode("N")
 
         if not self.window:
+            self._notify_mode(None)
             return
 
         self._update_target_app()
-        self._watermark.set_mode("NORMAL")
+        if self._dragging:
+            self._notify_mode("D")
+            self._watermark.set_mode("DRAG")
+        else:
+            self._notify_mode("N")
+            self._watermark.set_mode("NORMAL")
+            
         self._install_normal_tap()
         self._hide_all_labels()
         self._hints_visible = False
