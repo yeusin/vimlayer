@@ -338,6 +338,10 @@ class HintOverlay:
         if not self.window or not self._auto_insert_enabled:
             return
 
+        # Suppress auto-insert while window mode (prefix state) is active
+        if self._window_cmd_pending:
+            return
+
         if element is None:
             if self._insert_mode and self._auto_insert:
                 log.info("Auto-normal: focus lost")

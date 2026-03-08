@@ -147,3 +147,24 @@ def test_window_mode_restores_previous_mode(overlay, mocker):
     
     # Should restore "D" if dragging
     mock_notify.assert_called_with("D")
+
+def test_auto_insert_suppressed_during_window_mode(overlay, mocker):
+    overlay.window = MagicMock()
+    overlay._pid = 123
+    overlay._window_cmd_pending = True
+    overlay._auto_insert_enabled = True
+    
+    # Mock focused element as an input element
+    mock_element = MagicMock()
+    mocker.patch("vimlayer.accessibility.get_focused_element", return_value=mock_element)
+    mocker.patch("vimlayer.accessibility.is_input_element", return_value=True)
+    mocker.patch("vimlayer.accessibility.get_element_pid", return_value=overlay._pid)
+    
+    # Track enter_insert_mode
+    mock_enter_insert = mocker.patch.object(overlay, "enter_insert_mode")
+    
+    # Directly call _check_focus_and_auto_insert
+    overlay._check_focus_and_auto_insert(mock_element)
+    
+    # Should NOT have called enter_insert_mode because _window_cmd_pending is True
+    mock_enter_insert.assert_not_called()
