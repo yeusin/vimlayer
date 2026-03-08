@@ -1,13 +1,11 @@
 """AX tree querying and element matching."""
 
 import os
-from typing import Any, Dict, List, Optional, Tuple, Union
-import objc
+from typing import Any, Dict, List, Optional, Tuple
 import Quartz
 from ApplicationServices import (
     AXUIElementCreateApplication,
     AXUIElementCopyAttributeValue,
-    AXUIElementPerformAction,
     AXValueGetValue,
     kAXValueCGPointType,
     kAXValueCGSizeType,
@@ -72,6 +70,21 @@ CLICKABLE_IF_PRESSABLE = {
     "AXImage",
     "AXHeading",
 }
+
+
+# Roles that should trigger auto-insert mode
+INPUT_ROLES = {
+    "AXTextField",
+    "AXTextArea",
+}
+
+
+def is_input_element(element: Any) -> bool:
+    """Check if an element is a text input."""
+    role = _get_attr(element, "AXRole")
+    if role in INPUT_ROLES:
+        return True
+    return False
 
 
 def _get_attr(element: Any, attr: str) -> Any:

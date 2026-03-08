@@ -16,6 +16,7 @@ VimMouse overlays hint labels on clickable elements (buttons, links, text fields
 - **Cmd+key passthrough** — Standard macOS shortcuts (Cmd+W, Cmd+Tab, etc.) work as expected
 - **Launch at Login** — Start automatically via macOS ServiceManagement
 - **Status bar indicator** — Shows current mode (VM:N / VM:I)
+- **Auto-insert mode** — Intelligently switches to Insert mode when a text field is focused and back to Normal mode when focus is lost.
 
 ## Installation
 
@@ -48,6 +49,8 @@ VimMouse enters Normal mode immediately on launch. Press **Cmd+Shift+Space** (de
 **Normal mode** — The overlay is active. Use HJKL to move the cursor, type hints to click elements, or use any bound action.
 
 **Insert mode** — All keys pass through to the target app. A brief "INSERT" watermark flashes on screen. Press the hotkey to return to Normal mode.
+
+**Auto-insert mode** — Automatically activates when you focus a text field or text area (like a search bar). It intelligently returns to Normal mode when focus is lost. If you explicitly switch to Normal mode while an input is focused, auto-triggering is suppressed until you switch windows or focus a different element.
 
 ### Default Keybindings
 
@@ -100,6 +103,7 @@ Open Settings from the **VM** status bar menu to:
 
 - Record a new activation hotkey (must include a modifier key)
 - Customize keybindings for all actions (up to 4 keys per action)
+- Toggle **Auto-insert mode** (enabled by default)
 - Reset to defaults
 
 Example config:
@@ -108,6 +112,7 @@ Example config:
 {
   "keycode": 49,
   "flags": 393216,
+  "auto_insert_mode": true,
   "keybindings": {
     "move_left": {"keycode": 4},
     "toggle_hints": [

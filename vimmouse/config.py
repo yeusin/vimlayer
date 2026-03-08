@@ -11,6 +11,7 @@ _CONFIG_PATH = os.path.expanduser("~/.config/vimmouse/config.json")
 _DEFAULTS: Dict[str, Any] = {
     "keycode": 49,  # Space
     "flags": Quartz.kCGEventFlagMaskCommand | Quartz.kCGEventFlagMaskShift,
+    "auto_insert_mode": True,
 }
 
 BindingSpec = Dict[str, Union[int, bool]]

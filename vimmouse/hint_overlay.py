@@ -183,6 +183,8 @@ class HintOverlay:
         self._win_mgr = WindowManager()
 
         self._insert_mode = False
+        self._auto_insert = False
+        self._last_auto_element = None
         self._normal_tap = None
         self._normal_source = None
         self._menu_tap = None
@@ -233,6 +235,8 @@ class HintOverlay:
 
     def reload_keybindings(self):
         """Load keybindings from config and rebuild lookup tables."""
+        cfg = config.load()
+        self._auto_insert_enabled = cfg.get("auto_insert_mode", True)
         self._bindings = config.load_keybindings()
         self._binding_lookup = _build_binding_lookup(self._bindings)
         self._window_binding_lookup = _build_window_binding_lookup(self._bindings)
@@ -255,6 +259,86 @@ class HintOverlay:
         front = NSWorkspace.sharedWorkspace().frontmostApplication()
         if front.processIdentifier() != os.getpid():
             self._pid = front.processIdentifier()
+
+    # -- Focus watching --
+
+    def _start_watching_focus(self):
+        """Register for workspace app-activation notifications."""
+        ws = NSWorkspace.sharedWorkspace()
+        self._ws_observer = ws.notificationCenter().addObserverForName_object_queue_usingBlock_(
+            "NSWorkspaceDidActivateApplicationNotification",
+            None,
+            None,
+            lambda note: AppHelper.callAfter(self._on_app_activated, note),
+        )
+
+    def _on_app_activated(self, note):
+        """Called when any app gains focus. Refresh hints for the newly focused app."""
+        if not self.window or self._clicking:
+            return
+        if self._cycle_windows is not None:
+            return
+        activated = note.userInfo()["NSWorkspaceApplicationKey"]
+        activated_pid = activated.processIdentifier()
+        if activated_pid == os.getpid():
+            return
+
+        self._hide_all_labels()
+        if self._hints_visible:
+            self.refresh(pid=activated_pid, auto_hide_after=2.0)
+        else:
+            self._pid = activated_pid
+
+        if self._auto_insert_enabled:
+            # Clear suppression when switching apps/windows
+            self._last_auto_element = None
+            # Start polling for this new app
+            AppHelper.callAfter(self._poll_focus)
+
+    def _poll_focus(self):
+        """Poll the current focused element of the target app to detect input fields."""
+        if not self.window or not self._auto_insert_enabled or not self._pid:
+            return
+
+        app_element = AX.AXUIElementCreateApplication(self._pid)
+        err, element = AX.AXUIElementCopyAttributeValue(app_element, "AXFocusedUIElement", None)
+        if err == 0:
+            self._check_focus_and_auto_insert(element)
+        else:
+            # No element or error: focus is outside the app's accessible tree
+            self._check_focus_and_auto_insert(None)
+        
+        # Re-schedule poll
+        AppHelper.callLater(0.5, self._poll_focus)
+
+    def _check_focus_and_auto_insert(self, element):
+        """Enter insert mode if element is a text field, exit if it was auto-entered."""
+        if not self.window or not self._auto_insert_enabled:
+            return
+
+        if element is None:
+            if self._insert_mode and self._auto_insert:
+                log.info("Auto-normal: focus lost")
+                self._exit_insert_mode()
+            self._last_auto_element = None
+            return
+
+        is_input = accessibility.is_input_element(element)
+        if is_input:
+            if not self._insert_mode:
+                # Only re-trigger auto-insert if we are on a NEW element
+                if element != self._last_auto_element:
+                    log.info("Auto-insert: focus on input")
+                    self._last_auto_element = element
+                    self.enter_insert_mode(auto=True)
+            else:
+                # If we are in insert mode (manual or auto), update the last seen element
+                self._last_auto_element = element
+        else:
+            if self._insert_mode and self._auto_insert:
+                log.info("Auto-normal: focus lost from input")
+                self._exit_insert_mode()
+            self._last_auto_element = None
 
     # -- Global event tap for normal mode --
 
@@ -436,36 +520,12 @@ class HintOverlay:
         self.window.orderFrontRegardless()
         self._install_normal_tap()
         self._start_watching_focus()
+
+        if self._auto_insert_enabled:
+            AppHelper.callAfter(self._poll_focus)
+
         self._watermark.flash()
         self._notify_mode("N")
-
-    # -- Focus watching --
-
-    def _start_watching_focus(self):
-        """Register for workspace app-activation notifications."""
-        ws = NSWorkspace.sharedWorkspace()
-        self._ws_observer = ws.notificationCenter().addObserverForName_object_queue_usingBlock_(
-            "NSWorkspaceDidActivateApplicationNotification",
-            None,
-            None,
-            lambda note: AppHelper.callAfter(self._on_app_activated, note),
-        )
-
-    def _on_app_activated(self, note):
-        """Called when any app gains focus. Refresh hints for the newly focused app."""
-        if not self.window or self._clicking or self._insert_mode:
-            return
-        if self._cycle_windows is not None:
-            return
-        activated = note.userInfo()["NSWorkspaceApplicationKey"]
-        activated_pid = activated.processIdentifier()
-        if activated_pid == os.getpid():
-            return
-        self._hide_all_labels()
-        if self._hints_visible:
-            self.refresh(pid=activated_pid, auto_hide_after=2.0)
-        else:
-            self._pid = activated_pid
 
     # -- Hint population --
 
@@ -921,10 +981,15 @@ class HintOverlay:
 
     # -- Insert mode --
 
-    def enter_insert_mode(self):
+    def enter_insert_mode(self, auto=False):
         """Enter insert mode: prefer current focused window, fallback to window under cursor."""
         if self._insert_mode:
+            # If already in manual insert mode, don't downgrade to auto
+            if not auto:
+                self._auto_insert = False
             return
+
+        self._auto_insert = auto
 
         # First priority: check if there's already a focused window
         system = AX.AXUIElementCreateSystemWide()
@@ -946,7 +1011,7 @@ class HintOverlay:
                     self._switch_to_window(w)
                     break
 
-        log.info("mode: INSERT")
+        log.info("mode: INSERT (auto=%s)", auto)
         self._insert_mode = True
         self._notify_mode("I")
         self._remove_normal_tap()
@@ -956,6 +1021,7 @@ class HintOverlay:
         """Exit insert mode and restore the overlay."""
         log.info("mode: NORMAL")
         self._insert_mode = False
+        self._auto_insert = False
         self._notify_mode("N")
 
         if not self.window:
