@@ -430,6 +430,18 @@ class HintOverlay:
 
         # Handle pending window command (ctrl+w was pressed previously)
         if self._window_cmd_pending:
+            win_action = self._window_binding_lookup.get((code, ctrl))
+            
+            # Special case for win_cycle: keep window mode active so user can cycle repeatedly
+            if win_action == "win_cycle":
+                handler = _WINDOW_ACTIONS.get(win_action)
+                if handler:
+                    AppHelper.callAfter(handler(self))
+                    # Reset/refresh watermark timer
+                    AppHelper.callAfter(self._watermark.flash)
+                return None
+
+            # For all other keys (matched or unmatched), deactivate window mode
             self._window_cmd_pending = False
             if self._dragging:
                 self._notify_mode("D")
@@ -437,7 +449,6 @@ class HintOverlay:
                 self._notify_mode("N")
             AppHelper.callAfter(self._watermark.hide)
             
-            win_action = self._window_binding_lookup.get((code, ctrl))
             if win_action:
                 handler = _WINDOW_ACTIONS.get(win_action)
                 if handler:

@@ -168,3 +168,18 @@ def test_auto_insert_suppressed_during_window_mode(overlay, mocker):
     
     # Should NOT have called enter_insert_mode because _window_cmd_pending is True
     mock_enter_insert.assert_not_called()
+
+def test_window_cycle_keeps_window_mode(overlay, mocker):
+    overlay._window_cmd_pending = True
+    mock_event = MagicMock()
+    # Mock win_cycle action
+    overlay._window_binding_lookup = {(13, False): "win_cycle"}  # 'w' keycode 13
+    mocker.patch("Quartz.CGEventGetIntegerValueField", side_effect=lambda ev, field: 13 if field == Quartz.kCGKeyboardEventKeycode else 0)
+    mocker.patch("Quartz.CGEventGetFlags", return_value=0)
+    
+    mock_cycle = mocker.patch.object(overlay, "cycle_window")
+    
+    overlay._normal_tap_callback(None, Quartz.kCGEventKeyDown, mock_event, None)
+    
+    # Mode should still be pending
+    assert overlay._window_cmd_pending is True
