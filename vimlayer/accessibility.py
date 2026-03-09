@@ -286,6 +286,12 @@ def _is_element_covered(ex: float, ey: float, ew: float, eh: float, pid: int, wi
     cx, cy = ex + ew / 2, ey + eh / 2
     my_pid = os.getpid()
 
+    # If target_wid is not in win_list, it's an internal sub-window (e.g. web view).
+    # Fall back to None so we don't wrongly mark elements as covered by their own app.
+    if target_wid is not None:
+        if not any(w.get(Quartz.kCGWindowNumber, 0) == target_wid for w in win_list):
+            target_wid = None
+
     # The win_list is front-to-back.
     for w in win_list:
         w_pid = w.get(Quartz.kCGWindowOwnerPID, 0)
