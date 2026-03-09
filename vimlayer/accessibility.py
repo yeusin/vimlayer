@@ -17,9 +17,10 @@ from ApplicationServices import (
 # Private API: _AXUIElementGetWindow(AXUIElementRef, CGWindowID *) -> AXError
 try:
     _hi_bundle = objc.loadBundle(
-        "HIServices", {},
+        "HIServices",
+        {},
         bundle_path="/System/Library/Frameworks/ApplicationServices.framework/"
-                    "Frameworks/HIServices.framework",
+        "Frameworks/HIServices.framework",
     )
     _fn = {}
     objc.loadBundleFunctions(_hi_bundle, _fn, [("_AXUIElementGetWindow", b"l@o^I")])
@@ -36,6 +37,7 @@ def get_window_id(element: Any) -> Optional[int]:
     if err == 0:
         return wid
     return None
+
 
 # Semantic keyword → (AXRole, AXSubrole) or custom matcher
 SEMANTIC_MAP: Dict[str, Tuple[str, str]] = {
@@ -143,6 +145,7 @@ def _get_attr(element: Any, attr: str) -> Any:
         return value
     return None
 
+
 def is_element_stale(element: Any) -> bool:
     """Check if an AX element is no longer valid or visible."""
     # Try to fetch a basic attribute; if it fails, it's likely stale
@@ -150,6 +153,7 @@ def is_element_stale(element: Any) -> bool:
     if err != 0:
         return True
     return False
+
 
 def _is_clickable(role: str, element: Any) -> bool:
     """Check if an element can be clicked."""
@@ -224,7 +228,7 @@ def _collect_clickable(root: Any) -> List[Dict[str, Any]]:
 
         role = _get_attr(element, "AXRole")
         is_direct = _is_clickable(role, element) if role else False
-        
+
         # Determine if we should consider this element as a candidate
         effective_clickable = is_direct or (clickable_ancestor is not None)
 
@@ -232,9 +236,15 @@ def _collect_clickable(root: Any) -> List[Dict[str, Any]]:
             position = _get_attr(element, "AXPosition")
             size = _get_attr(element, "AXSize")
             if position is not None and size is not None:
-                results.append({"element": element, "role": role,
-                                "position": position, "size": size,
-                                "is_direct": is_direct})
+                results.append(
+                    {
+                        "element": element,
+                        "role": role,
+                        "position": position,
+                        "size": size,
+                        "is_direct": is_direct,
+                    }
+                )
 
         # Traverse children
         children = _get_attr(element, "AXChildren")
@@ -254,8 +264,16 @@ def _enrich_element(el: Dict[str, Any]) -> Dict[str, Any]:
         label = _child_text(element)
     if not label:
         label = role or "?"
-    el.update({"subrole": subrole, "title": title, "description": desc,
-               "value": value_str, "label": label, "clickable": el.get("is_direct", True)})
+    el.update(
+        {
+            "subrole": subrole,
+            "title": title,
+            "description": desc,
+            "value": value_str,
+            "label": label,
+            "clickable": el.get("is_direct", True),
+        }
+    )
     return el
 
 
@@ -281,7 +299,15 @@ def _get_visible_bounds(pid: int) -> Optional[Tuple[float, float, float, float]]
     return _element_rect(pos, size)
 
 
-def _is_element_covered(ex: float, ey: float, ew: float, eh: float, pid: int, win_list: List[Dict[str, Any]], target_wid: Optional[int] = None) -> bool:
+def _is_element_covered(
+    ex: float,
+    ey: float,
+    ew: float,
+    eh: float,
+    pid: int,
+    win_list: List[Dict[str, Any]],
+    target_wid: Optional[int] = None,
+) -> bool:
     """Check if the element's center point is covered by a window in front of it."""
     cx, cy = ex + ew / 2, ey + eh / 2
     my_pid = os.getpid()
@@ -324,7 +350,7 @@ def _is_element_covered(ex: float, ey: float, ew: float, eh: float, pid: int, wi
                     # Fallback: assume the first window of target app we hit is our target.
                     return False
             else:
-                # Another app's window is in front. 
+                # Another app's window is in front.
                 # Ignore very small windows (likely tooltips or overlays)
                 if ww < 50 or wh < 50:
                     continue
@@ -349,14 +375,13 @@ def get_clickable_elements(pid: int) -> List[Dict[str, Any]]:
     visible = []
     for el in candidates:
         ex, ey, ew, eh = _element_rect(el["position"], el["size"])
-        
+
         # Lower threshold for small clickable items (like icons)
         if ew < 4 or eh < 4:
             continue
-            
+
         # Check window bounds first (fast)
-        if not (ex + ew > bx and ex < bx + bw
-                and ey + eh > by and ey < by + bh):
+        if not (ex + ew > bx and ex < bx + bw and ey + eh > by and ey < by + bh):
             continue
 
         # Check occlusion by other windows (slower)
@@ -368,20 +393,32 @@ def get_clickable_elements(pid: int) -> List[Dict[str, Any]]:
 
     # Spatial Deduplication: pick the best element if multiple share nearly the same center.
     # Prioritize: is_direct > role in ALWAYS_CLICKABLE > larger area
-    visible.sort(key=lambda x: (
-        not x.get("is_direct", False),
-        x["role"] not in ALWAYS_CLICKABLE,
-        - (float(_get_attr(x["element"], "AXSize").width if _get_attr(x["element"], "AXSize") else 0) * 
-           float(_get_attr(x["element"], "AXSize").height if _get_attr(x["element"], "AXSize") else 0))
-    ))
-    
+    visible.sort(
+        key=lambda x: (
+            not x.get("is_direct", False),
+            x["role"] not in ALWAYS_CLICKABLE,
+            -(
+                float(
+                    _get_attr(x["element"], "AXSize").width
+                    if _get_attr(x["element"], "AXSize")
+                    else 0
+                )
+                * float(
+                    _get_attr(x["element"], "AXSize").height
+                    if _get_attr(x["element"], "AXSize")
+                    else 0
+                )
+            ),
+        )
+    )
+
     final_visible = []
     seen_centers: List[Tuple[float, float]] = []
-    
+
     for el in visible:
         ex, ey, ew, eh = _element_rect(el["position"], el["size"])
         cx, cy = ex + ew / 2, ey + eh / 2
-        
+
         is_dup = False
         for scx, scy in seen_centers:
             if abs(cx - scx) < 10 and abs(cy - scy) < 10:
@@ -394,7 +431,9 @@ def get_clickable_elements(pid: int) -> List[Dict[str, Any]]:
     return final_visible
 
 
-def get_all_clickable_elements(pid_bounds_map: Dict[int, List[Tuple[float, float, float, float]]]) -> List[Dict[str, Any]]:
+def get_all_clickable_elements(
+    pid_bounds_map: Dict[int, List[Tuple[float, float, float, float]]],
+) -> List[Dict[str, Any]]:
     """Get clickable elements for multiple PIDs, filtered by their window bounds."""
     all_elements = []
     win_list = _get_on_screen_windows()
@@ -402,7 +441,7 @@ def get_all_clickable_elements(pid_bounds_map: Dict[int, List[Tuple[float, float
     for pid, bounds_list in pid_bounds_map.items():
         app_ref = AXUIElementCreateApplication(pid)
         candidates = _collect_clickable(app_ref)
-        
+
         visible = []
         for el in candidates:
             ex, ey, ew, eh = _element_rect(el["position"], el["size"])
@@ -412,8 +451,7 @@ def get_all_clickable_elements(pid_bounds_map: Dict[int, List[Tuple[float, float
             # Within bounds of any of its app windows?
             in_any_bounds = False
             for bx, by, bw, bh in bounds_list:
-                if (ex + ew > bx and ex < bx + bw
-                        and ey + eh > by and ey < by + bh):
+                if ex + ew > bx and ex < bx + bw and ey + eh > by and ey < by + bh:
                     in_any_bounds = True
                     break
 
@@ -426,18 +464,17 @@ def get_all_clickable_elements(pid_bounds_map: Dict[int, List[Tuple[float, float
                 continue
 
             visible.append(_enrich_element(el))
-            
+
         # Spatial Deduplication
-        visible.sort(key=lambda x: (
-            not x.get("is_direct", False),
-            x["role"] not in ALWAYS_CLICKABLE
-        ))
-        
+        visible.sort(
+            key=lambda x: (not x.get("is_direct", False), x["role"] not in ALWAYS_CLICKABLE)
+        )
+
         seen_centers: List[Tuple[float, float]] = []
         for el in visible:
             ex, ey, ew, eh = _element_rect(el["position"], el["size"])
             cx, cy = ex + ew / 2, ey + eh / 2
-            
+
             is_dup = False
             for scx, scy in seen_centers:
                 if abs(cx - scx) < 10 and abs(cy - scy) < 10:
@@ -446,7 +483,7 @@ def get_all_clickable_elements(pid_bounds_map: Dict[int, List[Tuple[float, float
             if not is_dup:
                 all_elements.append(el)
                 seen_centers.append((cx, cy))
-                
+
     return all_elements
 
 
@@ -471,7 +508,9 @@ def search(query: str, elements: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [el for _, el in scored]
 
 
-def _score_element(el: Dict[str, Any], query_lower: str, semantic: Optional[Tuple[str, str]]) -> int:
+def _score_element(
+    el: Dict[str, Any], query_lower: str, semantic: Optional[Tuple[str, str]]
+) -> int:
     """Score an element against the query. 0 = no match."""
     # Semantic match (highest priority)
     if semantic:

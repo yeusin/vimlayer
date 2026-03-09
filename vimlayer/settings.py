@@ -102,9 +102,7 @@ class HotkeyRecorderField(NSTextField):
             field.setStringValue_(config.format_hotkey(keycode, flags))
             return None
 
-        self._monitor = NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
-            NSKeyDownMask, handle
-        )
+        self._monitor = NSEvent.addLocalMonitorForEventsMatchingMask_handler_(NSKeyDownMask, handle)
 
     def _stopRecording(self):
         if self._monitor is not None:
@@ -155,9 +153,7 @@ class KeyRecorderField(NSTextField):
             field.setStringValue_(config.format_binding(spec))
             return None
 
-        self._monitor = NSEvent.addLocalMonitorForEventsMatchingMask_handler_(
-            NSKeyDownMask, handle
-        )
+        self._monitor = NSEvent.addLocalMonitorForEventsMatchingMask_handler_(NSKeyDownMask, handle)
 
     def _stopRecording(self):
         if self._monitor is not None:
@@ -226,15 +222,13 @@ class SettingsController(NSObject):
         label.setFrame_(NSMakeRect(15, y, 140, 20))
         content.addSubview_(label)
 
-        recorder = HotkeyRecorderField.alloc().initWithFrame_(
-            NSMakeRect(160, y, 185, 20)
-        )
+        recorder = HotkeyRecorderField.alloc().initWithFrame_(NSMakeRect(160, y, 185, 20))
         keycode, flags = hotkey.get_hotkey()
         recorder.setStringValue_(config.format_hotkey(keycode, flags))
         recorder.setFont_(NSFont.systemFontOfSize_(13))
         content.addSubview_(recorder)
         self._recorder = recorder
-        y -= (shortcut_area - 20 + separator)
+        y -= shortcut_area - 20 + separator
 
         # --- Separator ---
         sep_label = NSTextField.labelWithString_("Key Bindings (normal mode):")
@@ -261,9 +255,7 @@ class SettingsController(NSObject):
         for action in self._actions:
             spec = bindings.get(action, {"keycode": 0})
             specs = spec if isinstance(spec, list) else [spec]
-            self._key_recorders[action] = [
-                self._make_recorder(s) for s in specs
-            ]
+            self._key_recorders[action] = [self._make_recorder(s) for s in specs]
         self._rebuild_binding_rows()
 
         # --- Buttons ---
@@ -354,9 +346,7 @@ class SettingsController(NSObject):
             # + button (if under max)
             if len(recorders) < _MAX_KEYS_PER_ACTION:
                 px = _KEYS_X + len(recorders) * _SLOT_W
-                pbtn = NSButton.alloc().initWithFrame_(
-                    NSMakeRect(px, ry, _BTN_W, 20)
-                )
+                pbtn = NSButton.alloc().initWithFrame_(NSMakeRect(px, ry, _BTN_W, 20))
                 pbtn.setTitle_("+")
                 pbtn.setBezelStyle_(NSBezelStyleSmallSquare)
                 pbtn.setFont_(NSFont.systemFontOfSize_(11))
@@ -375,9 +365,7 @@ class SettingsController(NSObject):
         for action in self._actions:
             spec = bindings.get(action, {"keycode": 0})
             specs = spec if isinstance(spec, list) else [spec]
-            self._key_recorders[action] = [
-                self._make_recorder(s) for s in specs
-            ]
+            self._key_recorders[action] = [self._make_recorder(s) for s in specs]
         self._rebuild_binding_rows()
 
     def _collect_keybindings(self):
@@ -453,9 +441,7 @@ class SettingsController(NSObject):
         for action in self._actions:
             spec = defaults.get(action, {"keycode": 0})
             specs = spec if isinstance(spec, list) else [spec]
-            self._key_recorders[action] = [
-                self._make_recorder(s) for s in specs
-            ]
+            self._key_recorders[action] = [self._make_recorder(s) for s in specs]
         self._rebuild_binding_rows()
 
     @objc.typedSelector(b"v@:@")

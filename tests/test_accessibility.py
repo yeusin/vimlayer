@@ -1,5 +1,5 @@
-import pytest
 from vimlayer import accessibility
+
 
 def test_subsequence_match():
     assert accessibility._subsequence_match("abc", "apple banana cherry")
@@ -7,14 +7,30 @@ def test_subsequence_match():
     assert not accessibility._subsequence_match("save", "sv")
     assert not accessibility._subsequence_match("xyz", "abcde")
 
+
 def test_score_element_semantic():
-    el = {"role": "AXButton", "subrole": "AXCloseButton", "title": "", "description": "", "value": "", "clickable": True}
+    el = {
+        "role": "AXButton",
+        "subrole": "AXCloseButton",
+        "title": "",
+        "description": "",
+        "value": "",
+        "clickable": True,
+    }
     score = accessibility._score_element(el, "close", ("AXButton", "AXCloseButton"))
     assert score == 100
 
+
 def test_score_element_text():
-    el = {"role": "AXButton", "subrole": "", "title": "Save Changes", "description": "", "value": "", "clickable": True}
-    
+    el = {
+        "role": "AXButton",
+        "subrole": "",
+        "title": "Save Changes",
+        "description": "",
+        "value": "",
+        "clickable": True,
+    }
+
     # Exact match (case-insensitive because query is already lowercased)
     assert accessibility._score_element(el, "save changes", None) >= 90
     # Startswith
@@ -24,26 +40,42 @@ def test_score_element_text():
     # Fuzzy
     assert accessibility._score_element(el, "sc", None) >= 20
 
+
 def test_search():
     elements = [
-        {"role": "AXButton", "subrole": "", "title": "Submit", "description": "", "value": "", "clickable": True},
-        {"role": "AXButton", "subrole": "", "title": "Cancel", "description": "", "value": "", "clickable": True},
+        {
+            "role": "AXButton",
+            "subrole": "",
+            "title": "Submit",
+            "description": "",
+            "value": "",
+            "clickable": True,
+        },
+        {
+            "role": "AXButton",
+            "subrole": "",
+            "title": "Cancel",
+            "description": "",
+            "value": "",
+            "clickable": True,
+        },
     ]
-    
+
     results = accessibility.search("sub", elements)
     assert len(results) == 1
     assert results[0]["title"] == "Submit"
-    
-    results = accessibility.search("cel", elements) # fuzzy
+
+    results = accessibility.search("cel", elements)  # fuzzy
     assert len(results) == 1
     assert results[0]["title"] == "Cancel"
 
 
 def test_is_input_element_new_roles():
     from unittest.mock import MagicMock
+
     # Mock element
     mock_el = MagicMock()
-    
+
     def get_attr(el, attr, _):
         if attr == "AXRole":
             return 0, el._role
@@ -52,6 +84,7 @@ def test_is_input_element_new_roles():
         return -1, None
 
     import vimlayer.accessibility as acc
+
     # Temporarily monkeypatch
     original = acc.AXUIElementCopyAttributeValue
     acc.AXUIElementCopyAttributeValue = get_attr
@@ -59,20 +92,20 @@ def test_is_input_element_new_roles():
         # Test AXTextField
         mock_el._role = "AXTextField"
         assert acc.is_input_element(mock_el) is True
-        
+
         # Test AXSearchField
         mock_el._role = "AXSearchField"
         assert acc.is_input_element(mock_el) is True
-        
+
         # Test AXComboBox
         mock_el._role = "AXComboBox"
         assert acc.is_input_element(mock_el) is True
-        
+
         # Test subrole AXSearchField
         mock_el._role = "AXGroup"
         mock_el._subrole = "AXSearchField"
         assert acc.is_input_element(mock_el) is True
-        
+
         # Test non-input role
         mock_el._role = "AXButton"
         mock_el._subrole = None
@@ -80,16 +113,27 @@ def test_is_input_element_new_roles():
     finally:
         acc.AXUIElementCopyAttributeValue = original
 
+
 def test_is_element_covered(mocker):
     # Mock Quartz.CGWindowListCopyWindowInfo and other functions
     mocker.patch("os.getpid", return_value=999)
-    
+
     # win_list front-to-back:
     # 0: App PID 100, Window ID 1, bounds (0,0,500,500)
     # 1: App PID 100, Window ID 2, bounds (0,0,500,500)
     win_list = [
-        {"kCGWindowOwnerPID": 100, "kCGWindowNumber": 1, "kCGWindowBounds": {"X":0, "Y":0, "Width":500, "Height":500}, "kCGWindowLayer": 0},
-        {"kCGWindowOwnerPID": 100, "kCGWindowNumber": 2, "kCGWindowBounds": {"X":0, "Y":0, "Width":500, "Height":500}, "kCGWindowLayer": 0},
+        {
+            "kCGWindowOwnerPID": 100,
+            "kCGWindowNumber": 1,
+            "kCGWindowBounds": {"X": 0, "Y": 0, "Width": 500, "Height": 500},
+            "kCGWindowLayer": 0,
+        },
+        {
+            "kCGWindowOwnerPID": 100,
+            "kCGWindowNumber": 2,
+            "kCGWindowBounds": {"X": 0, "Y": 0, "Width": 500, "Height": 500},
+            "kCGWindowLayer": 0,
+        },
     ]
 
     # Element at (250, 250), belonging to PID 100
@@ -104,24 +148,45 @@ def test_is_element_covered(mocker):
 
     # Case 3: Element is in Window 2, but Window 1 is a small overlay (< 50x50). Should NOT be covered.
     win_list_small = [
-        {"kCGWindowOwnerPID": 100, "kCGWindowNumber": 1, "kCGWindowBounds": {"X":240, "Y":240, "Width":20, "Height":20}, "kCGWindowLayer": 0},
-        {"kCGWindowOwnerPID": 100, "kCGWindowNumber": 2, "kCGWindowBounds": {"X":0, "Y":0, "Width":500, "Height":500}, "kCGWindowLayer": 0},
+        {
+            "kCGWindowOwnerPID": 100,
+            "kCGWindowNumber": 1,
+            "kCGWindowBounds": {"X": 240, "Y": 240, "Width": 20, "Height": 20},
+            "kCGWindowLayer": 0,
+        },
+        {
+            "kCGWindowOwnerPID": 100,
+            "kCGWindowNumber": 2,
+            "kCGWindowBounds": {"X": 0, "Y": 0, "Width": 500, "Height": 500},
+            "kCGWindowLayer": 0,
+        },
     ]
     assert not accessibility._is_element_covered(ex, ey, ew, eh, pid, win_list_small, target_wid=2)
 
     # Case 4: Element belongs to PID 100, but covered by another app PID 200.
     win_list_other = [
-        {"kCGWindowOwnerPID": 200, "kCGWindowNumber": 3, "kCGWindowBounds": {"X":0, "Y":0, "Width":500, "Height":500}, "kCGWindowLayer": 0},
-        {"kCGWindowOwnerPID": 100, "kCGWindowNumber": 2, "kCGWindowBounds": {"X":0, "Y":0, "Width":500, "Height":500}, "kCGWindowLayer": 0},
+        {
+            "kCGWindowOwnerPID": 200,
+            "kCGWindowNumber": 3,
+            "kCGWindowBounds": {"X": 0, "Y": 0, "Width": 500, "Height": 500},
+            "kCGWindowLayer": 0,
+        },
+        {
+            "kCGWindowOwnerPID": 100,
+            "kCGWindowNumber": 2,
+            "kCGWindowBounds": {"X": 0, "Y": 0, "Width": 500, "Height": 500},
+            "kCGWindowLayer": 0,
+        },
     ]
     assert accessibility._is_element_covered(ex, ey, ew, eh, pid, win_list_other, target_wid=2)
+
 
 def test_get_focused_element(mocker):
     mock_sw = mocker.patch("vimlayer.accessibility.AXUIElementCreateSystemWide")
     mock_copy = mocker.patch("vimlayer.accessibility.AXUIElementCopyAttributeValue")
-    
+
     mock_copy.return_value = (0, "mock_element")
-    
+
     el = accessibility.get_focused_element()
     assert el == "mock_element"
     mock_sw.assert_called_once()

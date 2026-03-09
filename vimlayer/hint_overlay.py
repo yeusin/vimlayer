@@ -49,25 +49,73 @@ WIN_HINT_GAP = 10  # gap between icon and text
 
 # macOS hardware key codes → Latin letters (input-source-independent)
 _KEYCODE_TO_CHAR = {
-    0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x",
-    8: "c", 9: "v", 11: "b", 12: "q", 13: "w", 14: "e", 15: "r",
-    16: "y", 17: "t", 18: "1", 19: "2", 20: "3", 21: "4", 22: "6",
-    23: "5", 24: "=", 25: "9", 26: "7", 27: "-", 28: "8", 29: "0",
-    30: "]", 31: "o", 32: "u", 33: "[", 34: "i", 35: "p", 36: "return",
-    37: "l", 38: "j", 39: "'", 40: "k", 41: ";", 42: "\\", 43: ",",
-    44: "/", 45: "n", 46: "m", 47: ".", 48: "tab", 49: "space", 50: "`",
+    0: "a",
+    1: "s",
+    2: "d",
+    3: "f",
+    4: "h",
+    5: "g",
+    6: "z",
+    7: "x",
+    8: "c",
+    9: "v",
+    11: "b",
+    12: "q",
+    13: "w",
+    14: "e",
+    15: "r",
+    16: "y",
+    17: "t",
+    18: "1",
+    19: "2",
+    20: "3",
+    21: "4",
+    22: "6",
+    23: "5",
+    24: "=",
+    25: "9",
+    26: "7",
+    27: "-",
+    28: "8",
+    29: "0",
+    30: "]",
+    31: "o",
+    32: "u",
+    33: "[",
+    34: "i",
+    35: "p",
+    36: "return",
+    37: "l",
+    38: "j",
+    39: "'",
+    40: "k",
+    41: ";",
+    42: "\\",
+    43: ",",
+    44: "/",
+    45: "n",
+    46: "m",
+    47: ".",
+    48: "tab",
+    49: "space",
+    50: "`",
 }
 _KEY_ESCAPE = 53
 _KEY_BACKSPACE = 51
-_CTRL_FLAG = 1 << 18   # NSEventModifierFlagControl
+_CTRL_FLAG = 1 << 18  # NSEventModifierFlagControl
 _SHIFT_FLAG = 1 << 17  # NSEventModifierFlagShift
 
 # Navigation and control keys to be blocked in normal mode
 _NAV_KEYCODES = {
-    123, 124, 125, 126,  # Arrows (Left, Right, Down, Up)
-    116, 121,            # Page Up, Page Down
-    115, 119,            # Home, End
-    117,                 # Forward Delete
+    123,
+    124,
+    125,
+    126,  # Arrows (Left, Right, Down, Up)
+    116,
+    121,  # Page Up, Page Down
+    115,
+    119,  # Home, End
+    117,  # Forward Delete
 }
 
 _ALL_ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -200,38 +248,69 @@ class HintOverlay:
 
     def _get_cheat_sheet_sections(self):
         """Return dynamic cheat sheet sections based on current keybindings."""
+
         def b(action):
             spec = self._bindings.get(action)
             return config.format_binding(spec, use_symbols=False) if spec else "??"
 
         sections = [
-            ("Navigation", [
-                (f"{b('move_up')} {b('move_down')} {b('move_left')} {b('move_right')}", "Move mouse cursor"),
-                (b("click"), "Left click"),
-                (b("right_click"), "Right click"),
-                (f"{b('scroll_up')} / {b('scroll_down')}", "Scroll up / down"),
-                (f"{b('back')} / {b('forward')}", "Mouse back / forward"),
-                (b("toggle_drag"), "Toggle mouse drag"),
-            ]),
-            ("Hints", [
-                (b("toggle_all_hints"), "Toggle hint labels (2s)"),
-                ("1-2 chars", "Click hinted element"),
-                ("Esc", "Reset typing / Dismiss hints"),
-            ]),
-            ("Modes & Tools", [
-                (b("insert_mode"), "Enter Insert mode"),
-                (b("open_launcher"), "Open app launcher"),
-                (b("window_prefix"), "Enter Window command mode"),
-                (config.format_hotkey(*hotkey.get_hotkey(), use_symbols=False), "Return to Normal mode"),
-            ]),
-            ("Window Commands (Prefix + ...)", [
-                (f"{b('win_half_up')} {b('win_half_down')} {b('win_half_left')} {b('win_half_right')}", "Tile to half screen"),
-                (f"{b('win_tile_1')} {b('win_tile_2')} {b('win_tile_3')} {b('win_tile_4')}", "Tile to quarter screen"),
-                (f"{b('win_sixth_tl')} {b('win_sixth_tc')} {b('win_sixth_tr')}", "Tile to top sixth"),
-                (f"{b('win_sixth_bl')} {b('win_sixth_bc')} {b('win_sixth_br')}", "Tile to bottom sixth"),
-                (f"{b('win_center')} / {b('win_maximize')}", "Center / Maximize window"),
-                (b("win_cycle"), "Cycle through windows"),
-            ])
+            (
+                "Navigation",
+                [
+                    (
+                        f"{b('move_up')} {b('move_down')} {b('move_left')} {b('move_right')}",
+                        "Move mouse cursor",
+                    ),
+                    (b("click"), "Left click"),
+                    (b("right_click"), "Right click"),
+                    (f"{b('scroll_up')} / {b('scroll_down')}", "Scroll up / down"),
+                    (f"{b('back')} / {b('forward')}", "Mouse back / forward"),
+                    (b("toggle_drag"), "Toggle mouse drag"),
+                ],
+            ),
+            (
+                "Hints",
+                [
+                    (b("toggle_all_hints"), "Toggle hint labels (2s)"),
+                    ("1-2 chars", "Click hinted element"),
+                    ("Esc", "Reset typing / Dismiss hints"),
+                ],
+            ),
+            (
+                "Modes & Tools",
+                [
+                    (b("insert_mode"), "Enter Insert mode"),
+                    (b("open_launcher"), "Open app launcher"),
+                    (b("window_prefix"), "Enter Window command mode"),
+                    (
+                        config.format_hotkey(*hotkey.get_hotkey(), use_symbols=False),
+                        "Return to Normal mode",
+                    ),
+                ],
+            ),
+            (
+                "Window Commands (Prefix + ...)",
+                [
+                    (
+                        f"{b('win_half_up')} {b('win_half_down')} {b('win_half_left')} {b('win_half_right')}",
+                        "Tile to half screen",
+                    ),
+                    (
+                        f"{b('win_tile_1')} {b('win_tile_2')} {b('win_tile_3')} {b('win_tile_4')}",
+                        "Tile to quarter screen",
+                    ),
+                    (
+                        f"{b('win_sixth_tl')} {b('win_sixth_tc')} {b('win_sixth_tr')}",
+                        "Tile to top sixth",
+                    ),
+                    (
+                        f"{b('win_sixth_bl')} {b('win_sixth_bc')} {b('win_sixth_br')}",
+                        "Tile to bottom sixth",
+                    ),
+                    (f"{b('win_center')} / {b('win_maximize')}", "Center / Maximize window"),
+                    (b("win_cycle"), "Cycle through windows"),
+                ],
+            ),
         ]
         return sections
 
@@ -254,7 +333,7 @@ class HintOverlay:
             else:
                 self._notify_mode("N")
             log.info("Window mode deactivated (watermark timeout)")
-            
+
             # When window mode is deactivated, check if we should auto-enter insert mode
             if self._auto_insert_enabled:
                 element = accessibility.get_focused_element()
@@ -330,7 +409,7 @@ class HintOverlay:
                 self._check_focus_and_auto_insert(None)
         else:
             self._check_focus_and_auto_insert(None)
-        
+
         # Re-schedule poll
         self._is_polling = True
         AppHelper.callLater(0.5, self._poll_focus)
@@ -416,7 +495,7 @@ class HintOverlay:
         # Pass Cmd+key combos through to the target app
         if cmd and not ctrl:
             return event
-            
+
         # Block Escape and reset typing or drag
         if code == _KEY_ESCAPE:
             AppHelper.callAfter(self._watermark.hide)
@@ -434,7 +513,7 @@ class HintOverlay:
         if self._window_cmd_pending:
             AppHelper.callAfter(self.cancel_drag)
             win_action = self._window_binding_lookup.get((code, ctrl))
-            
+
             # Special case for win_cycle: exit prefix state immediately to require prefix for next command,
             # but keep the mode as 'W' until the watermark disappears.
             if win_action == "win_cycle":
@@ -443,7 +522,7 @@ class HintOverlay:
                     AppHelper.callAfter(handler(self))
                     # Reset/refresh watermark timer
                     AppHelper.callAfter(self._watermark.flash)
-                
+
                 self._window_cmd_pending = False
                 # We do NOT call self._notify_mode here; it will be called in _on_watermark_hide
                 return None
@@ -464,7 +543,7 @@ class HintOverlay:
             else:
                 self._notify_mode("N")
             AppHelper.callAfter(self._watermark.hide)
-            
+
             if win_action:
                 handler = _WINDOW_ACTIONS.get(win_action)
                 if handler:
@@ -485,13 +564,21 @@ class HintOverlay:
                 AppHelper.callAfter(self.cancel_drag)
 
             if action == "move_left":
-                AppHelper.callAfter(lambda: self._mouse_ctrl.move_relative(-1, 0, repeat, self._dragging))
+                AppHelper.callAfter(
+                    lambda: self._mouse_ctrl.move_relative(-1, 0, repeat, self._dragging)
+                )
             elif action == "move_down":
-                AppHelper.callAfter(lambda: self._mouse_ctrl.move_relative(0, 1, repeat, self._dragging))
+                AppHelper.callAfter(
+                    lambda: self._mouse_ctrl.move_relative(0, 1, repeat, self._dragging)
+                )
             elif action == "move_up":
-                AppHelper.callAfter(lambda: self._mouse_ctrl.move_relative(0, -1, repeat, self._dragging))
+                AppHelper.callAfter(
+                    lambda: self._mouse_ctrl.move_relative(0, -1, repeat, self._dragging)
+                )
             elif action == "move_right":
-                AppHelper.callAfter(lambda: self._mouse_ctrl.move_relative(1, 0, repeat, self._dragging))
+                AppHelper.callAfter(
+                    lambda: self._mouse_ctrl.move_relative(1, 0, repeat, self._dragging)
+                )
             elif action == "scroll_up":
                 AppHelper.callAfter(lambda: self.scroll(3))
             elif action == "scroll_down":
@@ -530,7 +617,7 @@ class HintOverlay:
         # Block and show overlay for Normal Mode keys (navigation and alphanumeric)
         is_nav = code in _NAV_KEYCODES
         is_char = code in _KEYCODE_TO_CHAR
-        
+
         if is_nav or is_char:
             AppHelper.callAfter(self.cancel_drag)
 
@@ -540,7 +627,7 @@ class HintOverlay:
                 if char in _ALL_ALPHA:
                     AppHelper.callAfter(lambda c=char: self.type_char(c))
                     return None
-            
+
             # Show "NORMAL" watermark for any other blocked navigation/alphanumeric key
             AppHelper.callAfter(lambda: self._watermark.set_mode("NORMAL"))
             return None
@@ -733,7 +820,9 @@ class HintOverlay:
 
     def _create_window_hint_label(self, hint_text, cx, flipped_cy, pid):
         """Create a window hint with app icon and label in a rounded box."""
-        label = ui.make_label(hint_text, WIN_HINT_FONT_SIZE, None, WIN_HINT_TEXT_COLOR, draw_bg=False)
+        label = ui.make_label(
+            hint_text, WIN_HINT_FONT_SIZE, None, WIN_HINT_TEXT_COLOR, draw_bg=False
+        )
         lf = label.frame()
 
         # Check for icon
@@ -748,14 +837,19 @@ class HintOverlay:
 
         box = ui.RoundedBoxView.alloc().initWithFrame_color_radius_(
             NSMakeRect(cx - box_w / 2, flipped_cy - box_h / 2, box_w, box_h),
-            WIN_HINT_BG_COLOR, WIN_HINT_CORNER_RADIUS
+            WIN_HINT_BG_COLOR,
+            WIN_HINT_CORNER_RADIUS,
         )
 
         x_offset = WIN_HINT_PADDING_X
         if has_icon:
             icon_view = NSImageView.alloc().initWithFrame_(
-                NSMakeRect(x_offset, (box_h - WIN_HINT_ICON_SIZE) / 2,
-                           WIN_HINT_ICON_SIZE, WIN_HINT_ICON_SIZE)
+                NSMakeRect(
+                    x_offset,
+                    (box_h - WIN_HINT_ICON_SIZE) / 2,
+                    WIN_HINT_ICON_SIZE,
+                    WIN_HINT_ICON_SIZE,
+                )
             )
             icon = app.icon()
             icon.setSize_(NSMakeSize(WIN_HINT_ICON_SIZE, WIN_HINT_ICON_SIZE))
@@ -763,8 +857,9 @@ class HintOverlay:
             box.addSubview_(icon_view)
             x_offset += WIN_HINT_ICON_SIZE + WIN_HINT_GAP
 
-        label.setFrame_(NSMakeRect(x_offset, (box_h - lf.size.height) / 2,
-                                   lf.size.width, lf.size.height))
+        label.setFrame_(
+            NSMakeRect(x_offset, (box_h - lf.size.height) / 2, lf.size.width, lf.size.height)
+        )
         box.addSubview_(label)
 
         return box
@@ -817,7 +912,7 @@ class HintOverlay:
             self._dragging = False
             self._notify_mode("N")
             self._watermark.set_mode("NORMAL")
-            
+
         if self._hints_visible:
             self._hide_all_labels()
             self._hints_visible = False
@@ -864,7 +959,14 @@ class HintOverlay:
                     self.refresh()
                     return
                 cx, cy = mouse.element_center(data["position"], data["size"])
-                log.info("click: hint=%s role=%s title=%r (%.0f, %.0f)", hint, data["role"], data.get("title", ""), cx, cy)
+                log.info(
+                    "click: hint=%s role=%s title=%r (%.0f, %.0f)",
+                    hint,
+                    data["role"],
+                    data.get("title", ""),
+                    cx,
+                    cy,
+                )
                 self._click_and_dismiss(cx, cy)
         elif len(matching) == 0:
             # No match found - reset typing and show all labels again
@@ -955,19 +1057,27 @@ class HintOverlay:
         action = self._binding_lookup.get((code, ctrl, shift))
 
         if action == "move_left":
-            repeat = bool(Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventAutorepeat))
+            repeat = bool(
+                Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventAutorepeat)
+            )
             AppHelper.callAfter(lambda: self._mouse_ctrl.move_relative(-1, 0, repeat))
             return None
         elif action == "move_down":
-            repeat = bool(Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventAutorepeat))
+            repeat = bool(
+                Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventAutorepeat)
+            )
             AppHelper.callAfter(lambda: self._mouse_ctrl.move_relative(0, 1, repeat))
             return None
         elif action == "move_up":
-            repeat = bool(Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventAutorepeat))
+            repeat = bool(
+                Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventAutorepeat)
+            )
             AppHelper.callAfter(lambda: self._mouse_ctrl.move_relative(0, -1, repeat))
             return None
         elif action == "move_right":
-            repeat = bool(Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventAutorepeat))
+            repeat = bool(
+                Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventAutorepeat)
+            )
             AppHelper.callAfter(lambda: self._mouse_ctrl.move_relative(1, 0, repeat))
             return None
         elif action == "click" or code == _KEY_ESCAPE:
@@ -1036,8 +1146,7 @@ class HintOverlay:
         for w in windows:
             pid = w.get(Quartz.kCGWindowOwnerPID, 0)
             b = w.get(Quartz.kCGWindowBounds, {})
-            bounds = (b.get("X", 0), b.get("Y", 0),
-                      b.get("Width", 0), b.get("Height", 0))
+            bounds = (b.get("X", 0), b.get("Y", 0), b.get("Width", 0), b.get("Height", 0))
             pid_bounds.setdefault(pid, []).append(bounds)
         elements = accessibility.get_all_clickable_elements(pid_bounds)
         if elements:
@@ -1082,7 +1191,9 @@ class HintOverlay:
         err, focused_app = AX.AXUIElementCopyAttributeValue(system, "AXFocusedApplication", None)
         has_focused_window = False
         if err == 0 and focused_app:
-            err2, focused_win = AX.AXUIElementCopyAttributeValue(focused_app, "AXFocusedWindow", None)
+            err2, focused_win = AX.AXUIElementCopyAttributeValue(
+                focused_app, "AXFocusedWindow", None
+            )
             if err2 == 0 and focused_win:
                 has_focused_window = True
 
@@ -1092,8 +1203,9 @@ class HintOverlay:
             windows = self._get_visible_windows()
             for w in windows:
                 b = w.get(Quartz.kCGWindowBounds, {})
-                if (b.get("X", 0) <= mx <= b.get("X", 0) + b.get("Width", 0) and
-                    b.get("Y", 0) <= my <= b.get("Y", 0) + b.get("Height", 0)):
+                if b.get("X", 0) <= mx <= b.get("X", 0) + b.get("Width", 0) and b.get(
+                    "Y", 0
+                ) <= my <= b.get("Y", 0) + b.get("Height", 0):
                     self._switch_to_window(w)
                     break
 
@@ -1120,7 +1232,7 @@ class HintOverlay:
         else:
             self._notify_mode("N")
             self._watermark.set_mode("NORMAL")
-            
+
         self._install_normal_tap()
         self._hide_all_labels()
         self._hints_visible = False
@@ -1135,21 +1247,30 @@ class HintOverlay:
             log.info("cycle_window: snapshot %d windows:", len(self._cycle_windows))
             for i, w in enumerate(self._cycle_windows):
                 b = w.get(Quartz.kCGWindowBounds, {})
-                log.info("  [%d] pid=%s owner=%s wid=%s bounds=(%s,%s,%s,%s)",
-                         i, w.get(Quartz.kCGWindowOwnerPID),
-                         w.get(Quartz.kCGWindowOwnerName, "?"),
-                         w.get(Quartz.kCGWindowNumber, "?"),
-                         b.get("X"), b.get("Y"), b.get("Width"), b.get("Height"))
+                log.info(
+                    "  [%d] pid=%s owner=%s wid=%s bounds=(%s,%s,%s,%s)",
+                    i,
+                    w.get(Quartz.kCGWindowOwnerPID),
+                    w.get(Quartz.kCGWindowOwnerName, "?"),
+                    w.get(Quartz.kCGWindowNumber, "?"),
+                    b.get("X"),
+                    b.get("Y"),
+                    b.get("Width"),
+                    b.get("Height"),
+                )
         if not self._cycle_windows:
             log.info("cycle_window: no windows to cycle")
             return
         self._cycle_idx = (self._cycle_idx + 1) % len(self._cycle_windows)
         win_info = self._cycle_windows[self._cycle_idx]
-        log.info("cycle_window: idx=%d/%d -> pid=%s owner=%s wid=%s",
-                 self._cycle_idx, len(self._cycle_windows),
-                 win_info.get(Quartz.kCGWindowOwnerPID),
-                 win_info.get(Quartz.kCGWindowOwnerName, "?"),
-                 win_info.get(Quartz.kCGWindowNumber, "?"))
+        log.info(
+            "cycle_window: idx=%d/%d -> pid=%s owner=%s wid=%s",
+            self._cycle_idx,
+            len(self._cycle_windows),
+            win_info.get(Quartz.kCGWindowOwnerPID),
+            win_info.get(Quartz.kCGWindowOwnerName, "?"),
+            win_info.get(Quartz.kCGWindowNumber, "?"),
+        )
         pid = win_info[Quartz.kCGWindowOwnerPID]
         app = NSRunningApplication.runningApplicationWithProcessIdentifier_(pid)
         if app:
@@ -1158,8 +1279,7 @@ class HintOverlay:
         bounds = win_info[Quartz.kCGWindowBounds]
         wid = win_info.get(Quartz.kCGWindowNumber, 0)
         self._raise_window(pid, bounds, wid)
-        mouse.move_cursor(bounds["X"] + bounds["Width"] / 2,
-                          bounds["Y"] + bounds["Height"] / 2)
+        mouse.move_cursor(bounds["X"] + bounds["Width"] / 2, bounds["Y"] + bounds["Height"] / 2)
         # Clear snapshot after 2s of no cycling
         self._cycle_gen += 1
         gen = self._cycle_gen
@@ -1200,8 +1320,15 @@ class HintOverlay:
             return
         tx, ty = bounds["X"], bounds["Y"]
         tw, th = bounds["Width"], bounds["Height"]
-        log.info("_raise_window: looking for wid=%s (%.0f,%.0f,%.0f,%.0f) among %d AXWindows",
-                 target_wid, tx, ty, tw, th, len(windows))
+        log.info(
+            "_raise_window: looking for wid=%s (%.0f,%.0f,%.0f,%.0f) among %d AXWindows",
+            target_wid,
+            tx,
+            ty,
+            tw,
+            th,
+            len(windows),
+        )
 
         # --- Try matching by CGWindowNumber first (precise) ---
         if target_wid:
@@ -1222,7 +1349,12 @@ class HintOverlay:
             _, p = AX.AXValueGetValue(pos, AX.kAXValueCGPointType, None)
             _, s = AX.AXValueGetValue(size, AX.kAXValueCGSizeType, None)
             log.info("  [%d] pos=(%.0f,%.0f) size=(%.0f,%.0f)", i, p.x, p.y, s.width, s.height)
-            if abs(p.x - tx) < 2 and abs(p.y - ty) < 2 and abs(s.width - tw) < 2 and abs(s.height - th) < 2:
+            if (
+                abs(p.x - tx) < 2
+                and abs(p.y - ty) < 2
+                and abs(s.width - tw) < 2
+                and abs(s.height - th) < 2
+            ):
                 AX.AXUIElementPerformAction(win, "AXRaise")
                 log.info("  [%d] MATCHED by bounds — raised", i)
                 return

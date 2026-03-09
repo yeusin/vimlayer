@@ -76,7 +76,7 @@ def _fuzzy_score(query, name):
     qi = 0
     for i, ch in enumerate(name_lower):
         if qi < len(query) and ch == query[qi]:
-            if i == 0 or name_lower[i - 1] in (' ', '-', '_', '.'):
+            if i == 0 or name_lower[i - 1] in (" ", "-", "_", "."):
                 score -= 10  # word boundary bonus
             qi += 1
     return score
@@ -139,12 +139,16 @@ class _SearchFieldCell(objc.lookUpClass("NSTextFieldCell")):
     def editWithFrame_inView_editor_delegate_event_(self, rect, view, editor, delegate, event):
         r = NSMakeRect(rect.origin.x + 36, rect.origin.y, rect.size.width - 40, rect.size.height)
         objc.super(_SearchFieldCell, self).editWithFrame_inView_editor_delegate_event_(
-            r, view, editor, delegate, event)
+            r, view, editor, delegate, event
+        )
 
-    def selectWithFrame_inView_editor_delegate_start_length_(self, rect, view, editor, delegate, start, length):
+    def selectWithFrame_inView_editor_delegate_start_length_(
+        self, rect, view, editor, delegate, start, length
+    ):
         r = NSMakeRect(rect.origin.x + 36, rect.origin.y, rect.size.width - 40, rect.size.height)
         objc.super(_SearchFieldCell, self).selectWithFrame_inView_editor_delegate_start_length_(
-            r, view, editor, delegate, start, length)
+            r, view, editor, delegate, start, length
+        )
 
 
 class _SearchFieldView(NSView):
@@ -161,8 +165,7 @@ class _SearchFieldView(NSView):
 
     def drawRect_(self, rect):
         _color(_SEARCH_BG).set()
-        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
-            self.bounds(), 10, 10).fill()
+        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(self.bounds(), 10, 10).fill()
         # Draw magnifying glass icon
         _color(_SEARCH_PLACEHOLDER).set()
         cx, cy = 22, self.bounds().size.height / 2
@@ -196,13 +199,15 @@ class _ResultRowView(NSView):
 
         # App icon
         self._icon_view = NSImageView.alloc().initWithFrame_(
-            NSMakeRect(_ICON_PAD, icon_y, _ICON_SIZE, _ICON_SIZE))
+            NSMakeRect(_ICON_PAD, icon_y, _ICON_SIZE, _ICON_SIZE)
+        )
         self.addSubview_(self._icon_view)
 
         # App name
         name_x = _ICON_PAD + _ICON_SIZE + 10
         self._name_label = NSTextField.alloc().initWithFrame_(
-            NSMakeRect(name_x, h / 2 - 10, w - name_x - 100, 20))
+            NSMakeRect(name_x, h / 2 - 10, w - name_x - 100, 20)
+        )
         self._name_label.setEditable_(False)
         self._name_label.setSelectable_(False)
         self._name_label.setBezeled_(False)
@@ -213,8 +218,7 @@ class _ResultRowView(NSView):
         self.addSubview_(self._name_label)
 
         # Kind subtitle
-        self._kind_label = NSTextField.alloc().initWithFrame_(
-            NSMakeRect(w - 95, h / 2 - 8, 80, 16))
+        self._kind_label = NSTextField.alloc().initWithFrame_(NSMakeRect(w - 95, h / 2 - 8, 80, 16))
         self._kind_label.setEditable_(False)
         self._kind_label.setSelectable_(False)
         self._kind_label.setBezeled_(False)
@@ -247,8 +251,8 @@ class _ResultRowView(NSView):
         if self._selected:
             _color(_ROW_SELECTED_BG).set()
             NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(
-                NSMakeRect(4, 1, self.bounds().size.width - 8, self.bounds().size.height - 2),
-                8, 8).fill()
+                NSMakeRect(4, 1, self.bounds().size.width - 8, self.bounds().size.height - 2), 8, 8
+            ).fill()
 
 
 class _SearchFieldDelegate(NSObject):
@@ -358,7 +362,8 @@ class Launcher:
         # Search field container (with magnifying glass)
         search_y = _WIN_H - _SEARCH_H - _PAD
         search_container = _SearchFieldView.alloc().initWithFrame_(
-            NSMakeRect(_PAD, search_y, _WIN_W - 2 * _PAD, _SEARCH_H))
+            NSMakeRect(_PAD, search_y, _WIN_W - 2 * _PAD, _SEARCH_H)
+        )
         content.addSubview_(search_container)
 
         # Search text field inside the container
@@ -366,7 +371,8 @@ class Launcher:
         sf_h = 24  # single-line height for 18pt font
         sf_y = search_y + (_SEARCH_H - sf_h) / 2
         sf = NSTextField.alloc().initWithFrame_(
-            NSMakeRect(_PAD + 42, sf_y, _WIN_W - 2 * _PAD - 50, sf_h))
+            NSMakeRect(_PAD + 42, sf_y, _WIN_W - 2 * _PAD - 50, sf_h)
+        )
         sf.setFont_(sf_font)
         sf.setTextColor_(_color(_SEARCH_TEXT))
         sf.setBackgroundColor_(NSColor.clearColor())
@@ -383,11 +389,9 @@ class Launcher:
 
         # Separator line below search
         sep_y = search_y - 6
-        sep = NSView.alloc().initWithFrame_(
-            NSMakeRect(_PAD + 8, sep_y, _WIN_W - 2 * _PAD - 16, 1))
+        sep = NSView.alloc().initWithFrame_(NSMakeRect(_PAD + 8, sep_y, _WIN_W - 2 * _PAD - 16, 1))
         sep.setWantsLayer_(True)
-        sep.layer().setBackgroundColor_(
-            _color(_SEPARATOR).CGColor())
+        sep.layer().setBackgroundColor_(_color(_SEPARATOR).CGColor())
         content.addSubview_(sep)
 
         # Delegate
@@ -403,14 +407,12 @@ class Launcher:
         row_w = _WIN_W - 2 * _PAD
         for i in range(_MAX_VISIBLE):
             row_y = results_top - (i + 1) * _ROW_H
-            row = _ResultRowView.alloc().initWithFrame_(
-                NSMakeRect(_PAD, row_y, row_w, _ROW_H))
+            row = _ResultRowView.alloc().initWithFrame_(NSMakeRect(_PAD, row_y, row_w, _ROW_H))
             content.addSubview_(row)
             self._row_views.append(row)
 
         # Shortcut hint at the bottom
-        hint = NSTextField.alloc().initWithFrame_(
-            NSMakeRect(_PAD, 8, _WIN_W - 2 * _PAD, 14))
+        hint = NSTextField.alloc().initWithFrame_(NSMakeRect(_PAD, 8, _WIN_W - 2 * _PAD, 14))
         hint.setEditable_(False)
         hint.setSelectable_(False)
         hint.setBezeled_(False)

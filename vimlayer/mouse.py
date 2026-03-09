@@ -10,7 +10,7 @@ from ApplicationServices import (
 )
 
 
-_MOUSE_S0 = 4         # base sensitivity (pixels per step)
+_MOUSE_S0 = 4  # base sensitivity (pixels per step)
 _MOUSE_STEP_MAX = 100  # cap on maximum step size
 _MOUSE_RAMP_FRAMES = 20  # smooth ramp over ~20 events
 _MOUSE_TIMEOUT = 0.15  # session timeout for acceleration reset (seconds)
@@ -18,6 +18,7 @@ _MOUSE_TIMEOUT = 0.15  # session timeout for acceleration reset (seconds)
 
 class MouseController:
     """Manages mouse state, including acceleration for keyboard-driven movement."""
+
     def __init__(self) -> None:
         self._mouse_repeat_count = 0
         self._last_move_time = 0.0
@@ -32,8 +33,9 @@ class MouseController:
         # 1. Too much time passed since last move
         # 2. The direction changed significantly (reversing on either axis)
         # 3. This is a new key press (not a repeat)
-        direction_reversed = (dx != 0 and self._last_dx != 0 and (dx > 0) != (self._last_dx > 0)) or \
-                             (dy != 0 and self._last_dy != 0 and (dy > 0) != (self._last_dy > 0))
+        direction_reversed = (
+            dx != 0 and self._last_dx != 0 and (dx > 0) != (self._last_dx > 0)
+        ) or (dy != 0 and self._last_dy != 0 and (dy > 0) != (self._last_dy > 0))
 
         if repeat and (now - self._last_move_time < _MOUSE_TIMEOUT) and not direction_reversed:
             # We continue the ramp smoothly without abrupt jumps.
@@ -75,9 +77,7 @@ def move_cursor(x: float, y: float, dragging: bool = False) -> None:
     y = max(0, min(y, h - 1))
     point = Quartz.CGPointMake(x, y)
     event_type = Quartz.kCGEventLeftMouseDragged if dragging else Quartz.kCGEventMouseMoved
-    event = Quartz.CGEventCreateMouseEvent(
-        None, event_type, point, Quartz.kCGMouseButtonLeft
-    )
+    event = Quartz.CGEventCreateMouseEvent(None, event_type, point, Quartz.kCGMouseButtonLeft)
     if event:
         Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
 
@@ -142,12 +142,8 @@ def back_button() -> None:
     if not event:
         return
     pos = Quartz.CGEventGetLocation(event)
-    down = Quartz.CGEventCreateMouseEvent(
-        None, Quartz.kCGEventOtherMouseDown, pos, 3
-    )
-    up = Quartz.CGEventCreateMouseEvent(
-        None, Quartz.kCGEventOtherMouseUp, pos, 3
-    )
+    down = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventOtherMouseDown, pos, 3)
+    up = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventOtherMouseUp, pos, 3)
     if down and up:
         Quartz.CGEventSetIntegerValueField(down, Quartz.kCGMouseEventButtonNumber, 3)
         Quartz.CGEventSetIntegerValueField(up, Quartz.kCGMouseEventButtonNumber, 3)
@@ -161,12 +157,8 @@ def forward_button() -> None:
     if not event:
         return
     pos = Quartz.CGEventGetLocation(event)
-    down = Quartz.CGEventCreateMouseEvent(
-        None, Quartz.kCGEventOtherMouseDown, pos, 4
-    )
-    up = Quartz.CGEventCreateMouseEvent(
-        None, Quartz.kCGEventOtherMouseUp, pos, 4
-    )
+    down = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventOtherMouseDown, pos, 4)
+    up = Quartz.CGEventCreateMouseEvent(None, Quartz.kCGEventOtherMouseUp, pos, 4)
     if down and up:
         Quartz.CGEventSetIntegerValueField(down, Quartz.kCGMouseEventButtonNumber, 4)
         Quartz.CGEventSetIntegerValueField(up, Quartz.kCGMouseEventButtonNumber, 4)
@@ -176,9 +168,7 @@ def forward_button() -> None:
 
 def scroll(lines: int) -> None:
     """Scroll vertically. Positive = up, negative = down."""
-    event = Quartz.CGEventCreateScrollWheelEvent(
-        None, Quartz.kCGScrollEventUnitLine, 1, lines
-    )
+    event = Quartz.CGEventCreateScrollWheelEvent(None, Quartz.kCGScrollEventUnitLine, 1, lines)
     if event:
         Quartz.CGEventPost(Quartz.kCGHIDEventTap, event)
 

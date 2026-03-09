@@ -21,13 +21,13 @@
 ```mermaid
 stateDiagram-v2
     [*] --> OFF
-    
+
     OFF --> NORMAL : Hotkey (Cmd+Shift+Space)
     NORMAL --> OFF : Hotkey (Cmd+Shift+Space)
-    
+
     NORMAL --> WINDOW : Ctrl+W (Prefix)
     WINDOW --> NORMAL : Action Performed / Ctrl+W (Cycle) / Escape / Timeout
-    
+
     state NORMAL {
         [*] --> Idle
         Idle --> TypingHints : Alpha Key
@@ -36,13 +36,13 @@ stateDiagram-v2
 
     NORMAL --> INSERT : 'i' / Auto-focus input
     INSERT --> NORMAL : Escape / Blur input
-    
+
     NORMAL --> DRAG : 'v' (Toggle)
     DRAG --> NORMAL : 'v' (Toggle) / Escape
-    
+
     NORMAL --> MENU : Shift+Space (Right Click)
     MENU --> NORMAL : Escape / Click / Action
-    
+
     NORMAL --> LAUNCHER : '/' (Open Launcher)
     LAUNCHER --> NORMAL : Dismiss Launcher
 ```

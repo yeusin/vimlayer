@@ -50,7 +50,9 @@ class HotkeyManager:
         )
         self.tap = tap
         if tap is None:
-            log.error("Could not create event tap. Grant Accessibility permission in System Settings → Privacy & Security.")
+            log.error(
+                "Could not create event tap. Grant Accessibility permission in System Settings → Privacy & Security."
+            )
             return False
 
         source = Quartz.CFMachPortCreateRunLoopSource(None, tap, 0)
@@ -67,9 +69,7 @@ class HotkeyManager:
         if self.suspended:
             return event
         if event_type == Quartz.kCGEventKeyDown:
-            keycode = Quartz.CGEventGetIntegerValueField(
-                event, Quartz.kCGKeyboardEventKeycode
-            )
+            keycode = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
             flags = Quartz.CGEventGetFlags(event) & MODIFIER_MASK
             if keycode == self.keycode and flags == self.flags:
                 if self.callback:

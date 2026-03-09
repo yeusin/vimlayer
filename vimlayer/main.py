@@ -1,7 +1,6 @@
 """VimLayer - Spotlight-like UI element search and click for macOS."""
 
 import os
-import sys
 
 # Remove environment variables set by py2app that can interfere with subprocesses.
 # These are set by the py2app bootstrapper but can break external subprocesses.
@@ -50,9 +49,7 @@ class StatusBarController(NSObject):
         self._settings_ctrl = SettingsController.alloc().init()
 
         status_bar = NSStatusBar.systemStatusBar()
-        self._status_item = status_bar.statusItemWithLength_(
-            NSVariableStatusItemLength
-        )
+        self._status_item = status_bar.statusItemWithLength_(NSVariableStatusItemLength)
         self._status_item.setTitle_("VL")
 
         menu = NSMenu.alloc().init()
@@ -71,9 +68,7 @@ class StatusBarController(NSObject):
 
         menu.addItem_(NSMenuItem.separatorItem())
 
-        quit_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
-            "Quit", b"quit:", ""
-        )
+        quit_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Quit", b"quit:", "")
         quit_item.setTarget_(self)
         menu.addItem_(quit_item)
 
@@ -117,9 +112,7 @@ def _ensure_accessibility():
             capture_output=True,
         )
 
-    trusted = AXIsProcessTrustedWithOptions(
-        {kAXTrustedCheckOptionPrompt: True}
-    )
+    trusted = AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
     if not trusted:
         log.warning("Accessibility: not yet trusted, prompting user")
     return trusted

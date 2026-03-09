@@ -8,8 +8,10 @@ from AppKit import NSScreen
 
 log = logging.getLogger(__name__)
 
+
 class WindowManager:
     """Manages window operations like tiling, centering, and maximizing."""
+
     def __init__(self) -> None:
         self._saved_frames: Dict[int, Tuple[float, float, float, float]] = {}
 
@@ -53,8 +55,12 @@ class WindowManager:
             return
         ax_x, ax_y, ax_w, ax_h = self._get_visible_rect()
         hw, hh = ax_w / 2, ax_h / 2
-        coords = {1: (ax_x, ax_y), 2: (ax_x + hw, ax_y), 
-                  3: (ax_x, ax_y + hh), 4: (ax_x + hw, ax_y + hh)}
+        coords = {
+            1: (ax_x, ax_y),
+            2: (ax_x + hw, ax_y),
+            3: (ax_x, ax_y + hh),
+            4: (ax_x + hw, ax_y + hh),
+        }
         if quadrant in coords:
             x, y = coords[quadrant]
             self._set_window_frame(win, x, y, hw, hh)
@@ -76,7 +82,7 @@ class WindowManager:
             "left": (ax_x, ax_y, ax_w / 2, ax_h),
             "right": (ax_x + ax_w / 2, ax_y, ax_w / 2, ax_h),
             "top": (ax_x, ax_y, ax_w, ax_h / 2),
-            "bottom": (ax_x, ax_y + ax_h / 2, ax_w, ax_h / 2)
+            "bottom": (ax_x, ax_y + ax_h / 2, ax_w, ax_h / 2),
         }
         if side in frames:
             self._set_window_frame(win, *frames[side])

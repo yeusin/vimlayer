@@ -14,6 +14,7 @@ if not hasattr(zlib, "__file__"):
 # Hack for PyObjCTools namespace issue with py2app
 try:
     import PyObjCTools
+
     if not os.path.exists(os.path.join(PyObjCTools.__path__[0], "__init__.py")):
         with open(os.path.join(PyObjCTools.__path__[0], "__init__.py"), "w") as f:
             pass
@@ -24,7 +25,11 @@ except (ImportError, AttributeError, IndexError):
 # when pyproject.toml is present.
 if os.path.exists("pyproject.toml"):
     os.rename("pyproject.toml", "_pyproject.toml")
-    atexit.register(lambda: os.rename("_pyproject.toml", "pyproject.toml") if os.path.exists("_pyproject.toml") else None)
+    atexit.register(
+        lambda: os.rename("_pyproject.toml", "pyproject.toml")
+        if os.path.exists("_pyproject.toml")
+        else None
+    )
 
 version = os.environ.get("VIMLAYER_VERSION", "dev")
 
