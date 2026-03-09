@@ -92,6 +92,9 @@ stateDiagram-v2
 | `Shift + Space` | Right Click |
 | `Ctrl + f` / `Ctrl + b` | Scroll Down / Up |
 | `w` / `b` | Mouse Forward / Back |
+| `F10` | Toggle Mute |
+| `F11` | Volume Down |
+| `F12` | Volume Up |
 | `f` | Toggle Hint Labels (2s) |
 | `i` | Enter INSERT mode |
 | `v` | Toggle DRAG mode |

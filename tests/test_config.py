@@ -5,6 +5,10 @@ def test_default_keybindings():
     bindings = config.default_keybindings()
     assert "move_left" in bindings
     assert bindings["move_left"]["keycode"] == 4
+    # Media keys
+    assert bindings["volume_mute"]["keycode"] == 109
+    assert bindings["volume_down"]["keycode"] == 103
+    assert bindings["volume_up"]["keycode"] == 111
 
 
 def test_load_defaults(tmp_path, monkeypatch):

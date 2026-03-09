@@ -142,8 +142,21 @@ class WatermarkManager:
         self._mode_label.sizeToFit()
         f = self._mode_label.frame()
         w = f.size.width + 4
-        box_w = self._box.frame().size.width
+
+        # Dynamically resize the box to fit new text if it's wider than original content
+        screen = NSScreen.mainScreen().frame()
+        vl_f = self._box.subviews()[0].frame()  # "VL" label is first subview
+        content_w = max(vl_f.size.width, w)
+        box_w = content_w + _WM_BOX_PAD_X * 2
+        box_h = self._box.frame().size.height
+
+        cx, cy = screen.size.width / 2, screen.size.height / 2
+        self._box.setFrame_(NSMakeRect(cx - box_w / 2, cy - box_h / 2, box_w, box_h))
+
+        # Re-center "VL" and the mode label
+        self._box.subviews()[0].setFrameOrigin_(((box_w - vl_f.size.width) / 2, vl_f.origin.y))
         self._mode_label.setFrame_(NSMakeRect((box_w - w) / 2, _WM_BOX_PAD_Y, w, f.size.height))
+
         self.flash()
 
     def flash(self):

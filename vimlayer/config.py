@@ -33,6 +33,9 @@ _DEFAULT_KEYBINDINGS: Dict[str, BindingEntry] = {
     "back": {"keycode": 11},  # b
     "right_click": {"keycode": 49, "shift": True},  # shift+space
     "toggle_drag": {"keycode": 9},  # v
+    "volume_mute": {"keycode": 109},  # F10
+    "volume_down": {"keycode": 103}, # F11
+    "volume_up": {"keycode": 111},   # F12
     "window_prefix": {"keycode": 13, "ctrl": True},  # ctrl+w
     "win_cycle": {"keycode": 13, "ctrl": True},  # ctrl+w (after prefix)
     "win_tile_1": {"keycode": 18},  # 1

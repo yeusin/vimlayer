@@ -2,6 +2,7 @@
 
 import logging
 import os
+import subprocess
 import objc
 import Quartz
 from AppKit import (
@@ -266,6 +267,13 @@ class HintOverlay:
                     (f"{b('scroll_up')} / {b('scroll_down')}", "Scroll up / down"),
                     (f"{b('back')} / {b('forward')}", "Mouse back / forward"),
                     (b("toggle_drag"), "Toggle mouse drag"),
+                ],
+            ),
+            (
+                "Media Control",
+                [
+                    (f"{b('volume_up')} / {b('volume_down')}", "Volume Up / Down"),
+                    (b("volume_mute"), "Toggle Mute"),
                 ],
             ),
             (
@@ -583,6 +591,12 @@ class HintOverlay:
                 AppHelper.callAfter(lambda: self.scroll(3))
             elif action == "scroll_down":
                 AppHelper.callAfter(lambda: self.scroll(-3))
+            elif action == "volume_up":
+                AppHelper.callAfter(self.volume_up)
+            elif action == "volume_down":
+                AppHelper.callAfter(self.volume_down)
+            elif action == "volume_mute":
+                AppHelper.callAfter(self.volume_mute)
             elif action == "back":
                 AppHelper.callAfter(self.mouse_back)
             elif action == "forward":
@@ -875,6 +889,53 @@ class HintOverlay:
             self._hints_visible = False
             self.typed = ""
         self._hints_gen += 1  # Cancel any pending auto-hide
+
+    # -- Volume Control --
+
+    def _get_volume_status(self):
+        """Get current volume and muted status via osascript."""
+        try:
+            res = subprocess.run(
+                ["osascript", "-e", "get volume settings"], capture_output=True, text=True
+            ).stdout.strip()
+            # output: output volume:50, input volume:50, alert volume:100, output muted:false
+            parts = res.split(",")
+            vol = parts[0].split(":")[1]
+            muted = parts[3].split(":")[1] == "true"
+            return int(vol), muted
+        except Exception:
+            return None, None
+
+    def _show_volume_watermark(self):
+        """Update watermark with current volume level."""
+        vol, muted = self._get_volume_status()
+        if vol is not None:
+            status = f"VOL {vol}%" if not muted else "VOL: MUTED"
+            AppHelper.callAfter(lambda: self._watermark.set_mode(status))
+
+    def volume_up(self):
+        """Increase system volume via osascript."""
+        log.info("volume: up")
+        subprocess.run(
+            ["osascript", "-e", "set volume output volume (output volume of (get volume settings) + 6)"]
+        )
+        self._show_volume_watermark()
+
+    def volume_down(self):
+        """Decrease system volume via osascript."""
+        log.info("volume: down")
+        subprocess.run(
+            ["osascript", "-e", "set volume output volume (output volume of (get volume settings) - 6)"]
+        )
+        self._show_volume_watermark()
+
+    def volume_mute(self):
+        """Toggle system volume mute via osascript."""
+        log.info("volume: toggle mute")
+        subprocess.run(
+            ["osascript", "-e", "set volume output muted not (output muted of (get volume settings))"]
+        )
+        self._show_volume_watermark()
 
     # -- Clicking --
 

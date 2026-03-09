@@ -67,6 +67,9 @@ VimLayer enters Normal mode immediately on launch. Press **Cmd+Shift+Space** (de
 | `Ctrl+W` | Window command prefix (see below) |
 | `Ctrl+B` | Scroll up |
 | `Ctrl+F` | Scroll down |
+| `F10` | Toggle mute |
+| `F11` | Volume down |
+| `F12` | Volume up |
 | `Cmd+key` | Passed through to the target app |
 
 ### Window Management
