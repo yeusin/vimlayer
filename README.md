@@ -90,7 +90,7 @@ Press `Ctrl+W` to enter window command mode, then press a second key:
 
 When hints are visible, type the hint characters to click the corresponding element:
 
-- **UI elements** get two-character hints (e.g., `AB`, `CD`)
+- **UI elements** get two or three-character hints (e.g., `AB`, `ABC`)
 - **Windows** get single-character hints for quick switching
 - Typing filters hints in real-time; backspace removes the last character
 

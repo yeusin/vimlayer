@@ -280,7 +280,7 @@ class HintOverlay:
                 "Hints",
                 [
                     (b("toggle_all_hints"), "Toggle hint labels (2s)"),
-                    ("1-2 chars", "Click hinted element"),
+                    ("1-3 chars", "Click hinted element"),
                     ("Esc", "Reset typing / Dismiss hints"),
                 ],
             ),
@@ -755,15 +755,28 @@ class HintOverlay:
         return assignments, used
 
     def _generate_element_hints(self, count, used_chars):
-        """Generate two-letter hints from chars not used by windows."""
+        """Generate two or three-letter hints from chars not used by windows."""
         chars = self._hint_chars
         remaining = [c for c in chars if c not in used_chars]
+
+        # Use two-letter hints if they can fit all elements
+        if count <= len(remaining) * len(chars):
+            hints = []
+            for first in remaining:
+                for second in chars:
+                    hints.append(first + second)
+                    if len(hints) >= count:
+                        return hints
+            return hints
+
+        # Fall back to three-letter hints
         hints = []
         for first in remaining:
             for second in chars:
-                hints.append(first + second)
-                if len(hints) >= count:
-                    return hints
+                for third in chars:
+                    hints.append(first + second + third)
+                    if len(hints) >= count:
+                        return hints
         return hints
 
     def _populate(self, elements):
@@ -773,7 +786,7 @@ class HintOverlay:
         self.labels = []
         self.typed = ""
 
-        # Reserve at least 10 first-chars for element hints (10 × 19 = 190 hints)
+        # Reserve at least 10 first-chars for element hints (10 × 19 = 190 or 3,610 hints)
         max_win_hints = len(self._hint_chars) - 10
         windows = self._get_visible_windows()[:max_win_hints]
         win_assignments, used_chars = self._assign_window_hints(windows)
