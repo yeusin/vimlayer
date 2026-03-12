@@ -12,6 +12,24 @@ _DEFAULTS: Dict[str, Any] = {
     "keycode": 49,  # Space
     "flags": Quartz.kCGEventFlagMaskCommand | Quartz.kCGEventFlagMaskShift,
     "auto_insert_mode": True,
+    "global_tiling_bindings": {
+        "win_half_left": {"keycode": 4, "cmd": True, "ctrl": True},    # Cmd+Ctrl+H
+        "win_half_right": {"keycode": 37, "cmd": True, "ctrl": True}, # Cmd+Ctrl+L
+        "win_half_up": {"keycode": 40, "cmd": True, "ctrl": True},    # Cmd+Ctrl+K
+        "win_half_down": {"keycode": 38, "cmd": True, "ctrl": True},  # Cmd+Ctrl+J
+        "win_maximize": {"keycode": 36, "cmd": True, "ctrl": True},   # Cmd+Ctrl+Enter
+        "win_center": {"keycode": 8, "cmd": True, "ctrl": True},      # Cmd+Ctrl+C
+        "win_tile_1": {"keycode": 18, "cmd": True, "ctrl": True},     # Cmd+Ctrl+1
+        "win_tile_2": {"keycode": 19, "cmd": True, "ctrl": True},     # Cmd+Ctrl+2
+        "win_tile_3": {"keycode": 20, "cmd": True, "ctrl": True},     # Cmd+Ctrl+3
+        "win_tile_4": {"keycode": 21, "cmd": True, "ctrl": True},     # Cmd+Ctrl+4
+        "win_sixth_tl": {"keycode": 12, "cmd": True, "ctrl": True},   # Cmd+Ctrl+Q
+        "win_sixth_tc": {"keycode": 13, "cmd": True, "ctrl": True},   # Cmd+Ctrl+W
+        "win_sixth_tr": {"keycode": 14, "cmd": True, "ctrl": True},   # Cmd+Ctrl+E
+        "win_sixth_bl": {"keycode": 0, "cmd": True, "ctrl": True},    # Cmd+Ctrl+A
+        "win_sixth_bc": {"keycode": 1, "cmd": True, "ctrl": True},    # Cmd+Ctrl+S
+        "win_sixth_br": {"keycode": 2, "cmd": True, "ctrl": True},    # Cmd+Ctrl+D
+    },
 }
 
 BindingSpec = Dict[str, Union[int, bool]]
@@ -38,22 +56,6 @@ _DEFAULT_KEYBINDINGS: Dict[str, BindingEntry] = {
     "volume_up": {"keycode": 111},   # F12
     "window_prefix": {"keycode": 13, "ctrl": True},  # ctrl+w
     "win_cycle": {"keycode": 13, "ctrl": True},  # ctrl+w (after prefix)
-    "win_tile_1": {"keycode": 18},  # 1
-    "win_tile_2": {"keycode": 19},  # 2
-    "win_tile_3": {"keycode": 20},  # 3
-    "win_tile_4": {"keycode": 21},  # 4
-    "win_sixth_tl": {"keycode": 12},  # q
-    "win_sixth_tc": {"keycode": 13},  # w
-    "win_sixth_tr": {"keycode": 14},  # e
-    "win_sixth_bl": {"keycode": 0},  # a
-    "win_sixth_bc": {"keycode": 1},  # s
-    "win_sixth_br": {"keycode": 2},  # d
-    "win_half_left": {"keycode": 4},  # h
-    "win_half_down": {"keycode": 38},  # j
-    "win_half_up": {"keycode": 40},  # k
-    "win_half_right": {"keycode": 37},  # l
-    "win_center": {"keycode": 8},  # c
-    "win_maximize": {"keycode": 36},  # enter
 }
 
 # Mapping flag bits to both symbols and text
@@ -172,12 +174,16 @@ def default_keybindings() -> Dict[str, BindingEntry]:
 
 
 def load() -> Dict[str, Any]:
-    """Read config from disk, returning defaults if missing or invalid."""
+    """Read config from disk, merging with defaults."""
+    data = dict(_DEFAULTS)
     try:
         with open(_CONFIG_PATH) as f:
-            return json.load(f)
+            user_data = json.load(f)
+            if isinstance(user_data, dict):
+                data.update(user_data)
     except (FileNotFoundError, json.JSONDecodeError):
-        return dict(_DEFAULTS)
+        pass
+    return data
 
 
 def load_keybindings() -> Dict[str, BindingEntry]:

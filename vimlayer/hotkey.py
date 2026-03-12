@@ -15,9 +15,8 @@ MODIFIER_MASK = (
 
 class HotkeyManager:
     def __init__(self):
-        self.keycode = 49  # Space (default: Cmd+Shift+Space)
-        self.flags = Quartz.kCGEventFlagMaskCommand | Quartz.kCGEventFlagMaskShift
-        self.callback = None
+        self.hotkeys = {}  # (keycode, flags) -> callback
+        self.primary_hotkey = (49, Quartz.kCGEventFlagMaskCommand | Quartz.kCGEventFlagMaskShift)
         self.suspended = False
         self.tap = None
 
@@ -26,40 +25,35 @@ class HotkeyManager:
         self.suspended = value
 
     def get_hotkey(self):
-        """Return current (keycode, flags) tuple."""
-        return self.keycode, self.flags
+        """Return the primary (activation) hotkey as a (keycode, flags) tuple."""
+        return self.primary_hotkey
 
-    def update_hotkey(self, keycode, flags):
-        """Change the active hotkey at runtime."""
-        self.keycode = keycode
-        self.flags = flags
-
-    def register(self, callback, keycode=None, flags=None):
+    def register(self, callback, keycode, flags, is_primary=False):
         """Register a global hotkey that calls `callback`."""
-        self.callback = callback
-        if keycode is not None:
-            self.update_hotkey(keycode, flags)
+        self.hotkeys[(keycode, flags)] = callback
+        if is_primary:
+            self.primary_hotkey = (keycode, flags)
 
-        tap = Quartz.CGEventTapCreate(
-            Quartz.kCGSessionEventTap,
-            Quartz.kCGHeadInsertEventTap,
-            Quartz.kCGEventTapOptionDefault,
-            Quartz.CGEventMaskBit(Quartz.kCGEventKeyDown),
-            self._tap_callback,
-            None,
-        )
-        self.tap = tap
-        if tap is None:
-            log.error(
-                "Could not create event tap. Grant Accessibility permission in System Settings → Privacy & Security."
+        if self.tap is None:
+            self.tap = Quartz.CGEventTapCreate(
+                Quartz.kCGSessionEventTap,
+                Quartz.kCGHeadInsertEventTap,
+                Quartz.kCGEventTapOptionDefault,
+                Quartz.CGEventMaskBit(Quartz.kCGEventKeyDown),
+                self._tap_callback,
+                None,
             )
-            return False
+            if self.tap is None:
+                log.error(
+                    "Could not create event tap. Grant Accessibility permission in System Settings → Privacy & Security."
+                )
+                return False
 
-        source = Quartz.CFMachPortCreateRunLoopSource(None, tap, 0)
-        Quartz.CFRunLoopAddSource(
-            Quartz.CFRunLoopGetCurrent(), source, Quartz.kCFRunLoopCommonModes
-        )
-        Quartz.CGEventTapEnable(tap, True)
+            source = Quartz.CFMachPortCreateRunLoopSource(None, self.tap, 0)
+            Quartz.CFRunLoopAddSource(
+                Quartz.CFRunLoopGetCurrent(), source, Quartz.kCFRunLoopCommonModes
+            )
+            Quartz.CGEventTapEnable(self.tap, True)
         return True
 
     def _tap_callback(self, proxy, event_type, event, refcon):
@@ -71,11 +65,19 @@ class HotkeyManager:
         if event_type == Quartz.kCGEventKeyDown:
             keycode = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
             flags = Quartz.CGEventGetFlags(event) & MODIFIER_MASK
-            if keycode == self.keycode and flags == self.flags:
-                if self.callback:
-                    self.callback()
+            callback = self.hotkeys.get((keycode, flags))
+            if callback:
+                callback()
                 return None  # Suppress the event
         return event
+
+
+    def unregister_all(self):
+        """Clear all registered hotkeys except the primary one."""
+        primary_cb = self.hotkeys.get(self.primary_hotkey)
+        self.hotkeys = {}
+        if primary_cb:
+            self.hotkeys[self.primary_hotkey] = primary_cb
 
 
 _manager = HotkeyManager()
@@ -89,9 +91,9 @@ def get_hotkey():
     return _manager.get_hotkey()
 
 
-def update_hotkey(keycode, flags):
-    _manager.update_hotkey(keycode, flags)
+def register(callback, keycode, flags, is_primary=False):
+    return _manager.register(callback, keycode, flags, is_primary)
 
 
-def register(callback, keycode=None, flags=None):
-    return _manager.register(callback, keycode, flags)
+def unregister_all():
+    _manager.unregister_all()

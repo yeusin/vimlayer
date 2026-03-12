@@ -10,6 +10,7 @@ for var in ["ARGVZERO", "PYTHONPATH", "PYTHONHOME", "PYTHONUNBUFFERED", "PYTHOND
 import logging
 import signal
 import subprocess
+import Quartz
 from AppKit import (
     NSApplication,
     NSBundle,
@@ -118,6 +119,42 @@ def _ensure_accessibility():
     return trusted
 
 
+def register_global_hotkeys(overlay, cfg):
+    """Register all global tiling hotkeys from config."""
+    hotkey.unregister_all()
+    global_tiling = cfg.get("global_tiling_bindings", {})
+    for action, spec in global_tiling.items():
+        handler_factory = hint_overlay._WINDOW_ACTIONS.get(action)
+        if not handler_factory:
+            continue
+
+        handler = handler_factory(overlay)
+        keycode = spec.get("keycode")
+        if keycode is None:
+            continue
+            
+        flags = 0
+        if spec.get("cmd"):
+            flags |= Quartz.kCGEventFlagMaskCommand
+        if spec.get("alt"):
+            flags |= Quartz.kCGEventFlagMaskAlternate
+        if spec.get("ctrl"):
+            flags |= Quartz.kCGEventFlagMaskControl
+        if spec.get("shift"):
+            flags |= Quartz.kCGEventFlagMaskShift
+
+        def make_callback(h, a):
+            def callback():
+                AppHelper.callAfter(h)
+                # Show a brief watermark for the action
+                label = a.replace("win_", "").replace("_", " ").upper()
+                AppHelper.callAfter(lambda: overlay._watermark.set_mode(label, timeout=1.0))
+
+            return callback
+
+        hotkey.register(make_callback(handler, action), keycode, flags)
+
+
 def main():
     logging.basicConfig(
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -146,9 +183,16 @@ def main():
         # Schedule on main thread since CGEventTap callback runs on CF runloop
         AppHelper.callAfter(overlay.return_to_normal)
 
+    # Allow overlay to trigger global hotkey re-registration
+    overlay._on_config_change = lambda: register_global_hotkeys(overlay, config.load())
+
     cfg = config.load()
-    if not hotkey.register(on_hotkey, keycode=cfg["keycode"], flags=cfg["flags"]):
+    # Primary activation hotkey
+    if not hotkey.register(on_hotkey, keycode=cfg["keycode"], flags=cfg["flags"], is_primary=True):
         return
+
+    # Register global tiling hotkeys
+    register_global_hotkeys(overlay, cfg)
 
     overlay.show()
 

@@ -133,7 +133,7 @@ def test_window_mode_deactivation_triggers_auto_insert(overlay, mocker):
 def test_window_mode_notifies_status_bar(overlay, mocker):
     mock_event = MagicMock()
     # Mock window_prefix keybinding
-    overlay._binding_lookup = {(1, False, False): "window_prefix"}
+    overlay._binding_lookup = {(1, False, False, False, False): "window_prefix"}
     # keycode 1, ctrl=False, shift=False
     mocker.patch(
         "Quartz.CGEventGetIntegerValueField",
@@ -190,7 +190,7 @@ def test_window_cycle_clears_prefix_state(overlay, mocker):
     overlay._window_cmd_pending = True
     mock_event = MagicMock()
     # Mock win_cycle action
-    overlay._window_binding_lookup = {(13, False): "win_cycle"}  # 'w' keycode 13
+    overlay._window_binding_lookup = {(13, False, False, False, False): "win_cycle"}  # 'w' keycode 13
     mocker.patch(
         "Quartz.CGEventGetIntegerValueField",
         side_effect=lambda ev, field: 13 if field == Quartz.kCGKeyboardEventKeycode else 0,
@@ -209,7 +209,7 @@ def test_nested_window_prefix_keeps_window_mode(overlay, mocker):
     overlay._window_cmd_pending = True
     mock_event = MagicMock()
     # Mock window_prefix action
-    overlay._binding_lookup = {(13, True, False): "window_prefix"}  # ctrl+w
+    overlay._binding_lookup = {(13, True, False, False, False): "window_prefix"}  # ctrl+w
     mocker.patch(
         "Quartz.CGEventGetIntegerValueField",
         side_effect=lambda ev, field: 13 if field == Quartz.kCGKeyboardEventKeycode else 0,

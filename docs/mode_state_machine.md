@@ -9,7 +9,7 @@
 | **OFF** | - | Application is running but the overlay is hidden. System keys behave normally. |
 | **NORMAL** | `N` | Default active mode. Keys are captured and mapped to navigation and actions. |
 | **INSERT** | `I` | Keys are passed through to the focused application. Used for typing. |
-| **WINDOW** | `W` | Prefix mode (e.g., `Ctrl+W`) for window management commands. |
+| **WINDOW** | `W` | Prefix mode (e.g., `Ctrl+W`) for window cycling. |
 | **DRAG** | `D` | Mouse button is held down; navigation keys move the cursor to drag elements. |
 | **MENU** | - | Right-click context menu is open. Navigation keys move the cursor; others exit. |
 | **LAUNCHER** | - | Application launcher (Alfred-like) is open. |
@@ -66,18 +66,22 @@ stateDiagram-v2
 
 ### 4. NORMAL → WINDOW (Prefix Mode)
 *   **Trigger**: Pressing `Ctrl+W` enters a transient prefix state.
-*   **Behavior**: The watermark changes to "WINDOW" and the status bar shows `VL:W`. The system waits for a second key to perform a window management action (e.g., tiling, centering, cycling).
+*   **Behavior**: The watermark changes to "WINDOW" and the status bar shows `VL:W`. The system waits for a second key (`Ctrl+W`) to cycle windows.
 *   **Auto-Insert Suppression**: While the "WINDOW" watermark is visible (or while a prefix is pending), **Auto-Insert mode is strictly suppressed** to prevent interruptions during window management.
 *   **Exit**:
-    *   **Tiling/Other Actions**: Returns to NORMAL mode immediately after the action is performed. The watermark is hidden.
     *   **Cycling (`Ctrl+W Ctrl+W`)**: The prefix state is cleared (requiring another `Ctrl+W` for the next action), but the status remains `VL:W` and the "WINDOW" watermark stays visible until it times out. This allows for rapid cycling while maintaining visual feedback and suppressing auto-insert.
+    *   **Other keys**: Any other key will exit the WINDOW mode.
     *   **Timeout**: If no keys are pressed for 5 seconds, the watermark disappears and the system returns to NORMAL mode.
 
-### 5. NORMAL → DRAG
+### 5. Global Window Tiling
+*   **Trigger**: `Cmd+Ctrl` + [Key]
+*   **Behavior**: Window tiling (half, quarter, sixth), centering, and maximizing work globally in **any mode** (including INSERT and NORMAL).
+
+### 6. NORMAL → DRAG
 *   **Trigger**: Pressing `v` toggles mouse dragging.
 *   **Behavior**: Performs a mouse-down at the current cursor position. Navigation keys (`h`, `j`, `k`, `l`) now move the cursor while "holding" the mouse button.
 
-### 6. NORMAL → MENU
+### 7. NORMAL → MENU
 *   **Trigger**: Performing a right-click (`Shift+Space`).
 *   **Behavior**: Installs a specialized event tap that allows `h`, `j`, `k`, `l` to move the mouse cursor while a context menu is open, but allows other keys to pass through (to select menu items).
 
@@ -100,17 +104,23 @@ stateDiagram-v2
 | `v` | Toggle DRAG mode |
 | `/` | Open Application Launcher |
 | `?` (Shift + /) | Toggle Cheat Sheet |
-| `Ctrl + w` | **WINDOW Prefix** |
+| `Ctrl + w` | **WINDOW Prefix** (Cycle) |
+| `Cmd + Ctrl + [Key]` | **Global Window Tiling** |
 | `Esc` | Reset typing / Dismiss hints / Cancel Drag |
 
-### Window Commands (After `Ctrl+W`)
+### Global Window Tiling (Cmd+Ctrl + Key)
 
 | Key | Action |
 | :--- | :--- |
-| `Ctrl + w` | Cycle through visible windows |
 | `h`, `j`, `k`, `l` | Tile Window to Left, Bottom, Top, Right Half |
 | `1`, `2`, `3`, `4` | Tile Window to Quarters |
 | `q`, `w`, `e` | Tile Window to Top Sixths (L, C, R) |
 | `a`, `s`, `d` | Tile Window to Bottom Sixths (L, C, R) |
 | `c` | Center Window |
 | `Return` | Maximize Window |
+
+### Window Commands (After `Ctrl+W`)
+
+| Key | Action |
+| :--- | :--- |
+| `Ctrl + w` | Cycle through visible windows |

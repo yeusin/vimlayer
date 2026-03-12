@@ -105,6 +105,8 @@ _KEY_ESCAPE = 53
 _KEY_BACKSPACE = 51
 _CTRL_FLAG = 1 << 18  # NSEventModifierFlagControl
 _SHIFT_FLAG = 1 << 17  # NSEventModifierFlagShift
+_CMD_FLAG = 1 << 20    # NSEventModifierFlagCommand
+_ALT_FLAG = 1 << 19    # NSEventModifierFlagAlternate
 
 # Navigation and control keys to be blocked in normal mode
 _NAV_KEYCODES = {
@@ -123,27 +125,39 @@ _ALL_ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 def _build_binding_lookup(bindings):
-    """Build a dict mapping (keycode, ctrl, shift) → action from keybindings config."""
+    """Build a dict mapping (keycode, ctrl, shift, cmd, alt) → action from keybindings config."""
     lookup = {}
     for action, spec in bindings.items():
-        if action.startswith("win_"):
+        if action.startswith("win_") and action != "window_prefix":
             continue
         specs = spec if isinstance(spec, list) else [spec]
         for s in specs:
-            key = (s["keycode"], bool(s.get("ctrl", False)), bool(s.get("shift", False)))
+            key = (
+                s["keycode"],
+                bool(s.get("ctrl", False)),
+                bool(s.get("shift", False)),
+                bool(s.get("cmd", False)),
+                bool(s.get("alt", False)),
+            )
             lookup[key] = action
     return lookup
 
 
 def _build_window_binding_lookup(bindings):
-    """Build a dict mapping (keycode, ctrl) → action for window sub-commands."""
+    """Build a dict mapping (keycode, ctrl, shift, cmd, alt) → action for window sub-commands."""
     lookup = {}
     for action, spec in bindings.items():
         if not action.startswith("win_"):
             continue
         specs = spec if isinstance(spec, list) else [spec]
         for s in specs:
-            key = (s["keycode"], bool(s.get("ctrl", False)))
+            key = (
+                s["keycode"],
+                bool(s.get("ctrl", False)),
+                bool(s.get("shift", False)),
+                bool(s.get("cmd", False)),
+                bool(s.get("alt", False)),
+            )
             lookup[key] = action
     return lookup
 
@@ -179,7 +193,7 @@ def _compute_hint_chars(bindings):
             continue
         specs = spec if isinstance(spec, list) else [spec]
         for s in specs:
-            if not s.get("ctrl") and not s.get("shift"):
+            if not s.get("ctrl") and not s.get("shift") and not s.get("cmd") and not s.get("alt"):
                 bound_keycodes.add(s["keycode"])
     excluded = {_KEYCODE_TO_CHAR.get(kc, "").upper() for kc in bound_keycodes}
     return "".join(c for c in _ALL_ALPHA if c not in excluded)
@@ -215,6 +229,7 @@ class HintWindow(NSWindow):
 class HintOverlay:
     def __init__(self, on_mode_change=None):
         self._on_mode_change = on_mode_change
+        self._on_config_change = None
         self.window = None
         self.labels = []  # [(hint_string, NSTextField, data, kind)]
         self.typed = ""
@@ -252,7 +267,25 @@ class HintOverlay:
 
         def b(action):
             spec = self._bindings.get(action)
-            return config.format_binding(spec, use_symbols=False) if spec else "??"
+            if not spec:
+                spec = self._global_tiling_bindings.get(action)
+            if not spec:
+                return "??"
+
+            # For global tiling, we use format_hotkey as it includes modifiers beyond ctrl/shift
+            if action in self._global_tiling_bindings:
+                flags = 0
+                if spec.get("cmd"):
+                    flags |= Quartz.kCGEventFlagMaskCommand
+                if spec.get("ctrl"):
+                    flags |= Quartz.kCGEventFlagMaskControl
+                if spec.get("alt"):
+                    flags |= Quartz.kCGEventFlagMaskAlternate
+                if spec.get("shift"):
+                    flags |= Quartz.kCGEventFlagMaskShift
+                return config.format_hotkey(spec["keycode"], flags, use_symbols=False)
+
+            return config.format_binding(spec, use_symbols=False)
 
         sections = [
             (
@@ -297,7 +330,7 @@ class HintOverlay:
                 ],
             ),
             (
-                "Window Commands (Prefix + ...)",
+                "Global Window Tiling",
                 [
                     (
                         f"{b('win_half_up')} {b('win_half_down')} {b('win_half_left')} {b('win_half_right')}",
@@ -316,6 +349,11 @@ class HintOverlay:
                         "Tile to bottom sixth",
                     ),
                     (f"{b('win_center')} / {b('win_maximize')}", "Center / Maximize window"),
+                ],
+            ),
+            (
+                "Window Commands (Prefix + ...)",
+                [
                     (b("win_cycle"), "Cycle through windows"),
                 ],
             ),
@@ -326,10 +364,13 @@ class HintOverlay:
         """Load keybindings from config and rebuild lookup tables."""
         cfg = config.load()
         self._auto_insert_enabled = cfg.get("auto_insert_mode", True)
+        self._global_tiling_bindings = cfg.get("global_tiling_bindings", {})
         self._bindings = config.load_keybindings()
         self._binding_lookup = _build_binding_lookup(self._bindings)
         self._window_binding_lookup = _build_window_binding_lookup(self._bindings)
         self._hint_chars = _compute_hint_chars(self._bindings)
+        if self._on_config_change:
+            self._on_config_change()
 
     def _on_watermark_hide(self, mode):
         """Called when the watermark disappears."""
@@ -509,14 +550,12 @@ class HintOverlay:
 
         code = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
         flags = Quartz.CGEventGetFlags(event)
-        cmd = flags & (1 << 20)  # NSEventModifierFlagCommand
+        cmd = bool(flags & _CMD_FLAG)
+        alt = bool(flags & _ALT_FLAG)
         ctrl = bool(flags & _CTRL_FLAG)
+        shift = bool(flags & _SHIFT_FLAG)
 
-        # Pass Cmd+key combos through to the target app
-        if cmd and not ctrl:
-            return event
-
-        # Block Escape and reset typing or drag
+        # 1. Block Escape and reset typing or drag
         if code == _KEY_ESCAPE:
             AppHelper.callAfter(self._watermark.hide)
             AppHelper.callAfter(self.cancel_drag)
@@ -529,10 +568,10 @@ class HintOverlay:
             AppHelper.callAfter(self.backspace)
             return None
 
-        # Handle pending window command (ctrl+w was pressed previously)
+        # 2. Handle pending window command (ctrl+w was pressed previously)
         if self._window_cmd_pending:
             AppHelper.callAfter(self.cancel_drag)
-            win_action = self._window_binding_lookup.get((code, ctrl))
+            win_action = self._window_binding_lookup.get((code, ctrl, shift, cmd, alt))
 
             # Special case for win_cycle: exit prefix state immediately to require prefix for next command,
             # but keep the mode as 'W' until the watermark disappears.
@@ -548,8 +587,7 @@ class HintOverlay:
                 return None
 
             # Check if this key is the window prefix itself (e.g. ctrl+w ctrl+w)
-            shift = bool(flags & _SHIFT_FLAG)
-            action = self._binding_lookup.get((code, ctrl, shift))
+            action = self._binding_lookup.get((code, ctrl, shift, cmd, alt))
             if action == "window_prefix":
                 # Just refresh the watermark and stay in window mode
                 AppHelper.callAfter(self._watermark.flash)
@@ -570,8 +608,8 @@ class HintOverlay:
                     AppHelper.callAfter(handler(self))
             return None  # Block all keys after prefix
 
-        shift = bool(flags & _SHIFT_FLAG)
-        action = self._binding_lookup.get((code, ctrl, shift))
+        # 3. Check for registered normal mode actions
+        action = self._binding_lookup.get((code, ctrl, shift, cmd, alt))
         repeat = bool(Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventAutorepeat))
 
         if action:
@@ -635,12 +673,18 @@ class HintOverlay:
                 AppHelper.callAfter(lambda: self._watermark.set_mode("WINDOW"))
             return None
 
+        # 4. Passthrough for Cmd/Alt combinations not caught above
+        # This allows standard macOS shortcuts and our global tiling hotkeys (Cmd+Ctrl+...)
+        # to reach the system and the other event tap.
+        if cmd or alt:
+            return event
+
         # No binding matched.
         if self._cheat_sheet.is_visible():
             AppHelper.callAfter(self._cheat_sheet.hide)
             return None
 
-        # Block and show overlay for Normal Mode keys (navigation and alphanumeric)
+        # 5. Block and show overlay for remaining navigation and alphanumeric keys
         is_nav = code in _NAV_KEYCODES
         is_char = code in _KEYCODE_TO_CHAR
 
@@ -1138,9 +1182,11 @@ class HintOverlay:
 
         code = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
         flags = Quartz.CGEventGetFlags(event)
+        cmd = bool(flags & _CMD_FLAG)
+        alt = bool(flags & _ALT_FLAG)
         ctrl = bool(flags & _CTRL_FLAG)
         shift = bool(flags & _SHIFT_FLAG)
-        action = self._binding_lookup.get((code, ctrl, shift))
+        action = self._binding_lookup.get((code, ctrl, shift, cmd, alt))
 
         if action == "move_left":
             repeat = bool(
@@ -1395,7 +1441,7 @@ class HintOverlay:
         """Raise a specific window by matching its position/size via Accessibility.
 
         When *target_wid* (a CGWindowNumber) is provided we first try to match
-        by window-ID using the private _AXUIElementGetWindow helper, which
+        by window-ID using the accessibility.get_window_id helper, which
         avoids ambiguity when two windows share identical bounds.  Falls back to
         bounds matching when the window-ID lookup is unavailable or fails.
         """

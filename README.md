@@ -9,7 +9,7 @@ VimLayer overlays hint labels on clickable elements (buttons, links, text fields
 - **Hint-based clicking** — Type 1-2 character hints to click any UI element
 - **Vim-style cursor movement** — HJKL keys with smooth acceleration
 - **App launcher** — Alfred-like fuzzy search to launch apps and System Preferences panes
-- **Window management** — Tile, split, center, and maximize windows with Ctrl+W prefix
+- **Window management** — Tile, split, center, and maximize windows with Cmd+Ctrl prefix
 - **Window switching** — Single-letter hints to jump between visible windows
 - **Insert mode** — Passthrough mode for typing in the target app
 - **Fully customizable keybindings** — Remap every action via Settings UI
@@ -71,20 +71,28 @@ VimLayer enters Normal mode immediately on launch. Press **Cmd+Shift+Space** (de
 | `F11` | Volume down |
 | `F12` | Volume up |
 | `Cmd+key` | Passed through to the target app |
+| `Cmd+Ctrl+HJKL` | Global window tiling (see below) |
 
 ### Window Management
 
-Press `Ctrl+W` to enter window command mode, then press a second key:
+Window tiling and centering work globally in any mode (including Insert mode) using the **Cmd+Ctrl** prefix:
+
+| Key | Action |
+|-----|--------|
+| `Cmd+Ctrl+H` / `J` / `K` / `L` | Tile window to left / bottom / top / right half |
+| `Cmd+Ctrl+1` / `2` / `3` / `4` | Tile window to quarter |
+| `Cmd+Ctrl+Q` / `W` / `E` | Tile window to top-left / top-center / top-right sixth |
+| `Cmd+Ctrl+A` / `S` / `D` | Tile window to bottom-left / bottom-center / bottom-right sixth |
+| `Cmd+Ctrl+C` | Center window |
+| `Cmd+Ctrl+Enter` | Maximize window |
+
+### Window Commands (Prefix)
+
+Press **Ctrl+W** followed by:
 
 | Key | Action |
 |-----|--------|
 | `Ctrl+W` | Cycle through windows |
-| `h` / `j` / `k` / `l` | Tile window to left / bottom / top / right half |
-| `1` / `2` / `3` / `4` | Tile window to quarter |
-| `q` / `w` / `e` | Tile window to top-left / top-center / top-right sixth |
-| `a` / `s` / `d` | Tile window to bottom-left / bottom-center / bottom-right sixth |
-| `c` | Center window |
-| `Enter` | Maximize window |
 
 ### Hints
 

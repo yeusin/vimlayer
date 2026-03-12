@@ -45,22 +45,25 @@ _ACTION_LABELS = {
     "open_launcher": "App Launcher",
     "window_prefix": "Window Cmd",
     "win_cycle": "Win: Cycle",
-    "win_tile_1": "Win: Quarter \u2196",
-    "win_tile_2": "Win: Quarter \u2197",
-    "win_tile_3": "Win: Quarter \u2199",
-    "win_tile_4": "Win: Quarter \u2198",
-    "win_sixth_tl": "Win: Sixth \u2196",
-    "win_sixth_tc": "Win: Sixth \u2191",
-    "win_sixth_tr": "Win: Sixth \u2197",
-    "win_sixth_bl": "Win: Sixth \u2199",
-    "win_sixth_bc": "Win: Sixth \u2193",
-    "win_sixth_br": "Win: Sixth \u2198",
-    "win_half_left": "Win: Half Left",
-    "win_half_down": "Win: Half Bottom",
-    "win_half_up": "Win: Half Top",
-    "win_half_right": "Win: Half Right",
-    "win_center": "Win: Center",
-    "win_maximize": "Win: Maximize",
+}
+
+_GLOBAL_TILING_LABELS = {
+    "win_half_left": "Global Tile Left",
+    "win_half_right": "Global Tile Right",
+    "win_half_up": "Global Tile Top",
+    "win_half_down": "Global Tile Bottom",
+    "win_maximize": "Global Maximize",
+    "win_center": "Global Center",
+    "win_tile_1": "Global Quarter \u2196",
+    "win_tile_2": "Global Quarter \u2197",
+    "win_tile_3": "Global Quarter \u2199",
+    "win_tile_4": "Global Quarter \u2198",
+    "win_sixth_tl": "Global Sixth \u2196",
+    "win_sixth_tc": "Global Sixth \u2191",
+    "win_sixth_tr": "Global Sixth \u2197",
+    "win_sixth_bl": "Global Sixth \u2199",
+    "win_sixth_bc": "Global Sixth \u2193",
+    "win_sixth_br": "Global Sixth \u2198",
 }
 
 
@@ -182,8 +185,10 @@ class SettingsController(NSObject):
         self._window = None
         self._recorder = None
         self._key_recorders = {}  # action -> [KeyRecorderField, ...]
+        self._global_recorders = {}  # action -> HotkeyRecorderField
         self._doc_view = None
         self._actions = list(_ACTION_LABELS.keys())
+        self._global_actions = list(_GLOBAL_TILING_LABELS.keys())
         self._overlay = None  # set externally to reload bindings on save
         return self
 
@@ -198,14 +203,19 @@ class SettingsController(NSObject):
             NSApp.activateIgnoringOtherApps_(True)
             return
 
+        cfg = config.load()
         bindings = config.load_keybindings()
-        row_count = len(self._actions)
+        global_bindings = cfg.get("global_tiling_bindings", {})
+        
         # Window layout: shortcut row + separator + scrollable bindings + buttons
         shortcut_area = 50
         separator = 10
         button_area = 45
+        
+        # Count rows: normal actions + global actions + headers
+        row_count = len(self._actions) + len(self._global_actions) + 2 # headers
         scroll_h = row_count * _ROW_H
-        win_h = shortcut_area + separator + scroll_h + button_area
+        win_h = min(600, shortcut_area + separator + scroll_h + button_area)
 
         w = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             NSMakeRect(0, 0, 420, win_h),
@@ -234,7 +244,7 @@ class SettingsController(NSObject):
         y -= shortcut_area - 20 + separator
 
         # --- Separator ---
-        sep_label = NSTextField.labelWithString_("Key Bindings (normal mode):")
+        sep_label = NSTextField.labelWithString_("Key Bindings:")
         sep_label.setFont_(NSFont.boldSystemFontOfSize_(11))
         sep_label.setFrame_(NSMakeRect(15, y, 250, 16))
         content.addSubview_(sep_label)
@@ -242,7 +252,7 @@ class SettingsController(NSObject):
 
         # --- Key binding rows ---
         scroll_view_h = y - button_area
-        doc_h = row_count * _ROW_H
+        doc_h = (len(self._actions) + len(self._global_actions) + 2) * _ROW_H
         doc_view = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, 390, doc_h))
         self._doc_view = doc_view
 
@@ -253,12 +263,33 @@ class SettingsController(NSObject):
         scroll.setDocumentView_(doc_view)
         content.addSubview_(scroll)
 
-        # Initialize recorders from bindings, then build the rows
+        # Initialize normal recorders
         self._key_recorders = {}
         for action in self._actions:
             spec = bindings.get(action, {"keycode": 0})
             specs = spec if isinstance(spec, list) else [spec]
             self._key_recorders[action] = [self._make_recorder(s) for s in specs]
+            
+        # Initialize global recorders
+        self._global_recorders = {}
+        for action in self._global_actions:
+            spec = global_bindings.get(action)
+            rec = HotkeyRecorderField.alloc().initWithFrame_(NSMakeRect(0, 0, _REC_W * 2, 20))
+            rec.setFont_(NSFont.systemFontOfSize_(12))
+            if spec and spec.get("keycode") is not None:
+                # Convert config spec to (keycode, flags)
+                f = 0
+                if spec.get("cmd"): f |= Quartz.kCGEventFlagMaskCommand
+                if spec.get("alt"): f |= Quartz.kCGEventFlagMaskAlternate
+                if spec.get("ctrl"): f |= Quartz.kCGEventFlagMaskControl
+                if spec.get("shift"): f |= Quartz.kCGEventFlagMaskShift
+                rec._keycode = spec["keycode"]
+                rec._flags = f
+                rec.setStringValue_(config.format_hotkey(rec._keycode, rec._flags))
+            else:
+                rec.setStringValue_("Not set")
+            self._global_recorders[action] = rec
+            
         self._rebuild_binding_rows()
 
         # --- Buttons ---
@@ -302,61 +333,103 @@ class SettingsController(NSObject):
         """Clear and rebuild all keybinding rows in the doc view."""
         for sub in list(self._doc_view.subviews()):
             sub.removeFromSuperview()
-        # Count section headers (one before the first win_ action)
-        has_win_section = any(a.startswith("win_") for a in self._actions)
-        extra_rows = 1 if has_win_section else 0
-        doc_h = (len(self._actions) + extra_rows) * _ROW_H
+        
+        # Headers: "Normal Mode", "After Window Cmd", "Global Tiling"
+        # We'll explicitly manage the layout
+        extra_rows = 3
+        doc_h = (len(self._actions) + len(self._global_actions) + extra_rows) * _ROW_H
         self._doc_view.setFrameSize_((self._doc_view.frame().size.width, doc_h))
+        
         row_idx = 0
-        win_header_added = False
+        
+        # 1. Normal Mode Actions
+        ry = doc_h - (row_idx + 1) * _ROW_H + 5
+        sep = NSTextField.labelWithString_("Normal Mode Actions:")
+        sep.setFont_(NSFont.boldSystemFontOfSize_(11))
+        sep.setTextColor_(NSColor.secondaryLabelColor())
+        sep.setFrame_(NSMakeRect(5, ry, 250, 16))
+        self._doc_view.addSubview_(sep)
+        row_idx += 1
+        
         for action in self._actions:
-            # Insert section header before first win_ action
-            if action.startswith("win_") and not win_header_added:
-                win_header_added = True
-                ry = doc_h - (row_idx + 1) * _ROW_H + 5
-                sep = NSTextField.labelWithString_("After Window Cmd:")
-                sep.setFont_(NSFont.boldSystemFontOfSize_(11))
-                sep.setTextColor_(NSColor.secondaryLabelColor())
-                sep.setFrame_(NSMakeRect(5, ry, 250, 16))
-                self._doc_view.addSubview_(sep)
-                row_idx += 1
-            ry = doc_h - (row_idx + 1) * _ROW_H + 5
+            if action.startswith("win_"):
+                continue
+            self._add_binding_row(action, doc_h, row_idx)
             row_idx += 1
-            # Action label
-            lbl = NSTextField.labelWithString_(_ACTION_LABELS[action] + ":")
-            lbl.setFrame_(NSMakeRect(5, ry, _LABEL_W, 20))
+            
+        # 2. After Window Cmd (Prefix)
+        ry = doc_h - (row_idx + 1) * _ROW_H + 5
+        sep = NSTextField.labelWithString_("After Window Cmd (Prefix):")
+        sep.setFont_(NSFont.boldSystemFontOfSize_(11))
+        sep.setTextColor_(NSColor.secondaryLabelColor())
+        sep.setFrame_(NSMakeRect(5, ry, 250, 16))
+        self._doc_view.addSubview_(sep)
+        row_idx += 1
+        
+        for action in self._actions:
+            if not action.startswith("win_"):
+                continue
+            self._add_binding_row(action, doc_h, row_idx)
+            row_idx += 1
+
+        # 3. Global Tiling Bindings
+        ry = doc_h - (row_idx + 1) * _ROW_H + 5
+        sep = NSTextField.labelWithString_("Global Tiling Shortcuts (All Modes):")
+        sep.setFont_(NSFont.boldSystemFontOfSize_(11))
+        sep.setTextColor_(NSColor.secondaryLabelColor())
+        sep.setFrame_(NSMakeRect(5, ry, 250, 16))
+        self._doc_view.addSubview_(sep)
+        row_idx += 1
+        
+        for action in self._global_actions:
+            ry = doc_h - (row_idx + 1) * _ROW_H + 5
+            lbl = NSTextField.labelWithString_(_GLOBAL_TILING_LABELS[action] + ":")
+            lbl.setFrame_(NSMakeRect(5, ry, _LABEL_W + 40, 20))
             lbl.setFont_(NSFont.systemFontOfSize_(12))
             self._doc_view.addSubview_(lbl)
-            # Key recorder slots
-            recorders = self._key_recorders[action]
-            for si, rec in enumerate(recorders):
-                rx = _KEYS_X + si * _SLOT_W
-                rec.setFrame_(NSMakeRect(rx, ry, _REC_W, 20))
-                self._doc_view.addSubview_(rec)
-                # × button (only if more than one key)
-                if len(recorders) > 1:
-                    xbtn = NSButton.alloc().initWithFrame_(
-                        NSMakeRect(rx + _REC_W + 1, ry, _BTN_W, 20)
-                    )
-                    xbtn.setTitle_("\u00d7")
-                    xbtn.setBezelStyle_(NSBezelStyleSmallSquare)
-                    xbtn.setFont_(NSFont.systemFontOfSize_(11))
-                    xbtn.setTarget_(self)
-                    xbtn.setAction_(b"removeKey:")
-                    xbtn.setAccessibilityIdentifier_(action)
-                    xbtn.setTag_(si)
-                    self._doc_view.addSubview_(xbtn)
-            # + button (if under max)
-            if len(recorders) < _MAX_KEYS_PER_ACTION:
-                px = _KEYS_X + len(recorders) * _SLOT_W
-                pbtn = NSButton.alloc().initWithFrame_(NSMakeRect(px, ry, _BTN_W, 20))
-                pbtn.setTitle_("+")
-                pbtn.setBezelStyle_(NSBezelStyleSmallSquare)
-                pbtn.setFont_(NSFont.systemFontOfSize_(11))
-                pbtn.setTarget_(self)
-                pbtn.setAction_(b"addKey:")
-                pbtn.setAccessibilityIdentifier_(action)
-                self._doc_view.addSubview_(pbtn)
+            
+            rec = self._global_recorders[action]
+            rec.setFrame_(NSMakeRect(_KEYS_X + 40, ry, _REC_W * 2, 20))
+            self._doc_view.addSubview_(rec)
+            row_idx += 1
+
+    def _add_binding_row(self, action, doc_h, row_idx):
+        ry = doc_h - (row_idx + 1) * _ROW_H + 5
+        # Action label
+        lbl = NSTextField.labelWithString_(_ACTION_LABELS[action] + ":")
+        lbl.setFrame_(NSMakeRect(5, ry, _LABEL_W, 20))
+        lbl.setFont_(NSFont.systemFontOfSize_(12))
+        self._doc_view.addSubview_(lbl)
+        # Key recorder slots
+        recorders = self._key_recorders[action]
+        for si, rec in enumerate(recorders):
+            rx = _KEYS_X + si * _SLOT_W
+            rec.setFrame_(NSMakeRect(rx, ry, _REC_W, 20))
+            self._doc_view.addSubview_(rec)
+            # × button (only if more than one key)
+            if len(recorders) > 1:
+                xbtn = NSButton.alloc().initWithFrame_(
+                    NSMakeRect(rx + _REC_W + 1, ry, _BTN_W, 20)
+                )
+                xbtn.setTitle_("\u00d7")
+                xbtn.setBezelStyle_(NSBezelStyleSmallSquare)
+                xbtn.setFont_(NSFont.systemFontOfSize_(11))
+                xbtn.setTarget_(self)
+                xbtn.setAction_(b"removeKey:")
+                xbtn.setAccessibilityIdentifier_(action)
+                xbtn.setTag_(si)
+                self._doc_view.addSubview_(xbtn)
+        # + button (if under max)
+        if len(recorders) < _MAX_KEYS_PER_ACTION:
+            px = _KEYS_X + len(recorders) * _SLOT_W
+            pbtn = NSButton.alloc().initWithFrame_(NSMakeRect(px, ry, _BTN_W, 20))
+            pbtn.setTitle_("+")
+            pbtn.setBezelStyle_(NSBezelStyleSmallSquare)
+            pbtn.setFont_(NSFont.systemFontOfSize_(11))
+            pbtn.setTarget_(self)
+            pbtn.setAction_(b"addKey:")
+            pbtn.setAccessibilityIdentifier_(action)
+            self._doc_view.addSubview_(pbtn)
 
     def _refresh_values(self):
         """Refresh displayed values from current config."""
@@ -364,11 +437,33 @@ class SettingsController(NSObject):
         self._recorder.setStringValue_(config.format_hotkey(keycode, flags))
         self._recorder._keycode = None
         self._recorder._flags = 0
+        
+        cfg = config.load()
         bindings = config.load_keybindings()
+        global_bindings = cfg.get("global_tiling_bindings", {})
+        
         for action in self._actions:
             spec = bindings.get(action, {"keycode": 0})
             specs = spec if isinstance(spec, list) else [spec]
             self._key_recorders[action] = [self._make_recorder(s) for s in specs]
+            
+        for action in self._global_actions:
+            spec = global_bindings.get(action)
+            rec = self._global_recorders[action]
+            if spec and spec.get("keycode") is not None:
+                f = 0
+                if spec.get("cmd"): f |= Quartz.kCGEventFlagMaskCommand
+                if spec.get("alt"): f |= Quartz.kCGEventFlagMaskAlternate
+                if spec.get("ctrl"): f |= Quartz.kCGEventFlagMaskControl
+                if spec.get("shift"): f |= Quartz.kCGEventFlagMaskShift
+                rec._keycode = spec["keycode"]
+                rec._flags = f
+                rec.setStringValue_(config.format_hotkey(rec._keycode, rec._flags))
+            else:
+                rec._keycode = None
+                rec._flags = 0
+                rec.setStringValue_("Not set")
+                
         self._rebuild_binding_rows()
 
     def _collect_keybindings(self):
@@ -395,6 +490,8 @@ class SettingsController(NSObject):
         for recorders in self._key_recorders.values():
             for rec in recorders:
                 rec._stopRecording()
+        for rec in self._global_recorders.values():
+            rec._stopRecording()
 
     @objc.typedSelector(b"v@:@")
     def addKey_(self, sender):
@@ -429,8 +526,23 @@ class SettingsController(NSObject):
             hotkey.update_hotkey(rec._keycode, rec._flags)
             data["keycode"] = rec._keycode
             data["flags"] = rec._flags
+            
         # Save keybindings
         data["keybindings"] = self._collect_keybindings()
+        
+        # Save global tiling bindings
+        global_bindings = {}
+        for action, rec in self._global_recorders.items():
+            if rec._keycode is not None:
+                entry = {"keycode": rec._keycode}
+                f = rec._flags
+                if f & Quartz.kCGEventFlagMaskCommand: entry["cmd"] = True
+                if f & Quartz.kCGEventFlagMaskAlternate: entry["alt"] = True
+                if f & Quartz.kCGEventFlagMaskControl: entry["ctrl"] = True
+                if f & Quartz.kCGEventFlagMaskShift: entry["shift"] = True
+                global_bindings[action] = entry
+        data["global_tiling_bindings"] = global_bindings
+        
         config.save(data)
         if self._overlay:
             self._overlay.reload_keybindings()

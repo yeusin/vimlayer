@@ -28,9 +28,9 @@ def test_raise_window_with_wid_match(overlay, mocker):
         side_effect=lambda el, attr, val: (0, [mock_win]) if attr == "AXWindows" else (0, None),
     )
 
-    # Mock _AXUIElementGetWindow in hint_overlay
+    # Mock accessibility.get_window_id
     mock_get_window = mocker.patch(
-        "vimlayer.hint_overlay._AXUIElementGetWindow", return_value=(0, 12345)
+        "vimlayer.accessibility.get_window_id", return_value=12345
     )
 
     # Mock AXUIElementPerformAction
@@ -42,8 +42,8 @@ def test_raise_window_with_wid_match(overlay, mocker):
 
     overlay._raise_window(pid, bounds, target_wid)
 
-    # Should have called _AXUIElementGetWindow
-    mock_get_window.assert_called_with(mock_win, None)
+    # Should have called get_window_id
+    mock_get_window.assert_called_with(mock_win)
     # Should have called AXRaise
     mock_perform.assert_called_with(mock_win, "AXRaise")
 
@@ -81,8 +81,8 @@ def test_raise_window_fallback_to_bounds(overlay, mocker):
     mocker.patch("vimlayer.hint_overlay.AX.kAXValueCGPointType", kAXValueCGPointType)
     mocker.patch("vimlayer.hint_overlay.AX.kAXValueCGSizeType", kAXValueCGSizeType)
 
-    # Mock _AXUIElementGetWindow to return a DIFFERENT ID (no match)
-    mocker.patch("vimlayer.hint_overlay._AXUIElementGetWindow", return_value=(0, 99999))
+    # Mock accessibility.get_window_id to return a DIFFERENT ID (no match)
+    mocker.patch("vimlayer.accessibility.get_window_id", return_value=99999)
 
     # Mock AXUIElementPerformAction
     mock_perform = mocker.patch("vimlayer.hint_overlay.AX.AXUIElementPerformAction")
@@ -130,8 +130,8 @@ def test_raise_window_no_wid_helper(overlay, mocker):
     mocker.patch("vimlayer.hint_overlay.AX.kAXValueCGPointType", kAXValueCGPointType)
     mocker.patch("vimlayer.hint_overlay.AX.kAXValueCGSizeType", kAXValueCGSizeType)
 
-    # Mock _AXUIElementGetWindow to be None (unavailable)
-    mocker.patch("vimlayer.hint_overlay._AXUIElementGetWindow", None)
+    # Mock accessibility.get_window_id to be None (unavailable)
+    mocker.patch("vimlayer.accessibility.get_window_id", return_value=None)
 
     # Mock AXUIElementPerformAction
     mock_perform = mocker.patch("vimlayer.hint_overlay.AX.AXUIElementPerformAction")
