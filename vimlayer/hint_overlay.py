@@ -167,8 +167,6 @@ def _compute_hint_chars(bindings):
     """Return hint chars string excluding keys bound to actions."""
     bound_keycodes = set()
     for action, spec in bindings.items():
-        if action.startswith("win_"):
-            continue
         specs = spec if isinstance(spec, list) else [spec]
         for s in specs:
             if not s.get("ctrl") and not s.get("shift") and not s.get("cmd") and not s.get("alt"):
@@ -582,6 +580,8 @@ class HintOverlay:
                 AppHelper.callAfter(lambda: self._cheat_sheet.toggle(sections))
             elif action == "open_launcher":
                 AppHelper.callAfter(self._open_launcher)
+            else:
+                return event  # Not a handled action, let it fall through
             return None
 
         # 4. Passthrough for Cmd/Alt combinations not caught above
