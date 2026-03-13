@@ -111,5 +111,20 @@ class TestHotkeyManager(unittest.TestCase):
         cb1.assert_not_called()
         self.assertEqual(result, mock_event)
 
+    def test_update_hotkey(self):
+        cb = MagicMock()
+        flags1 = mock_quartz.kCGEventFlagMaskCommand
+        flags2 = mock_quartz.kCGEventFlagMaskAlternate
+        
+        self.hotkey.register(cb, 10, flags1, is_primary=True)
+        self.assertEqual(self.hotkey.get_hotkey(), (10, flags1))
+        
+        # Update hotkey to new keycode/flags
+        self.hotkey.update_hotkey(20, flags2)
+        
+        self.assertEqual(self.hotkey.get_hotkey(), (20, flags2))
+        self.assertNotIn((10, flags1), self.hotkey._manager.hotkeys)
+        self.assertEqual(self.hotkey._manager.hotkeys[(20, flags2)], cb)
+
 if __name__ == "__main__":
     unittest.main()

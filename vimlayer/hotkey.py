@@ -79,6 +79,14 @@ class HotkeyManager:
         if primary_cb:
             self.hotkeys[self.primary_hotkey] = primary_cb
 
+    def update_hotkey(self, keycode, flags):
+        """Update the primary (activation) hotkey registration."""
+        old_primary = self.primary_hotkey
+        callback = self.hotkeys.pop(old_primary, None)
+        self.primary_hotkey = (keycode, flags)
+        if callback:
+            self.hotkeys[self.primary_hotkey] = callback
+
 
 _manager = HotkeyManager()
 
@@ -97,3 +105,7 @@ def register(callback, keycode, flags, is_primary=False):
 
 def unregister_all():
     _manager.unregister_all()
+
+
+def update_hotkey(keycode, flags):
+    _manager.update_hotkey(keycode, flags)
