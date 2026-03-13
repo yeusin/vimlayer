@@ -403,10 +403,16 @@ class HintOverlay:
             self._is_polling = False
             return
 
+        # Skip polling if launcher or menu is active
+        if self._launcher.is_visible() or self._menu_tap:
+            AppHelper.callLater(0.5, self._poll_focus)
+            return
+
         element = accessibility.get_focused_element()
         if element:
+            pid = accessibility.get_element_pid(element)
             # Only care about elements belonging to the active app
-            if accessibility.get_element_pid(element) == self._pid:
+            if pid is not None and pid == self._pid:
                 self._check_focus_and_auto_insert(element)
             else:
                 self._check_focus_and_auto_insert(None)
@@ -1134,7 +1140,11 @@ class HintOverlay:
         self._remove_menu_tap()
         if self.window:
             self._update_target_app()
-            self._install_normal_tap()
+            if not self._insert_mode:
+                self._install_normal_tap()
+                self._notify_mode("N")
+            else:
+                self._notify_mode("I")
             if self._hints_visible:
                 self.refresh()
 
@@ -1210,17 +1220,30 @@ class HintOverlay:
         """Open the Alfred-like app launcher."""
         self._hide_all_labels()
         self._remove_normal_tap()
+        # Reset any auto-insert state when going to launcher
+        self._insert_mode = False
+        self._auto_insert = False
+        self._notify_mode("L")
         self._launcher.show()
 
     def _on_launcher_dismiss(self):
         """Called when the launcher is dismissed."""
         self._update_target_app()
-        self._install_normal_tap()
+        if not self._insert_mode:
+            self._install_normal_tap()
+            self._notify_mode("N")
+        else:
+            # If we were (or became) in insert mode, make sure the watermark and status reflect it
+            self._watermark.set_mode("INSERT")
+            self._notify_mode("I")
 
     # -- Insert mode --
 
     def enter_insert_mode(self, auto=False):
         """Enter insert mode: prefer current focused window, fallback to window under cursor."""
+        if self._launcher.is_visible():
+            return
+
         if self._insert_mode:
             # If already in manual insert mode, don't downgrade to auto
             if not auto:
@@ -1260,6 +1283,9 @@ class HintOverlay:
 
     def _exit_insert_mode(self):
         """Exit insert mode and restore the overlay."""
+        if self._launcher.is_visible():
+            return
+
         log.info("mode: NORMAL")
         self._insert_mode = False
         self._auto_insert = False
