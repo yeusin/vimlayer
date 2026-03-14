@@ -11,7 +11,8 @@ def overlay(mocker):
     mock_cs = mocker.patch("vimlayer.hint_overlay.CheatSheetOverlay").return_value
     mock_cs.is_visible.return_value = False
     mocker.patch("vimlayer.hint_overlay.WindowManager")
-    mocker.patch("vimlayer.hint_overlay.Launcher")
+    mock_launcher = mocker.patch("vimlayer.hint_overlay.Launcher").return_value
+    mock_launcher.is_visible.return_value = False
     mocker.patch("vimlayer.config.load_keybindings", return_value={})
     return HintOverlay()
 
@@ -34,9 +35,14 @@ def test_block_arrow_keys(overlay, mocker):
     # Track AppHelper.callAfter
     mock_call_after = mocker.patch("PyObjCTools.AppHelper.callAfter")
 
-    # Call the callback
-    res = overlay._normal_tap_callback(None, Quartz.kCGEventKeyDown, mock_event, None)
+    overlay._insert_mode = False
+    overlay._launcher.is_visible = MagicMock(return_value=False)
 
+    # Call the callback
+    print(f"DEBUG: Quartz.kCGEventTapDisabledByTimeout={Quartz.kCGEventTapDisabledByTimeout}")
+    res = overlay._normal_tap_callback(None, Quartz.kCGEventKeyDown, mock_event, None)
+    print(f"DEBUG RETURN VALUE: {res}")
+    print(f"DEBUG mock_event: {mock_event}")
     # Should return None (blocked)
     assert res is None
 
@@ -57,18 +63,23 @@ def test_block_unbound_alphanumeric_keys(overlay, mocker):
 
     # Mock CGEventGetIntegerValueField to return 'z' keycode (6)
     def get_int_value(ev, field):
+        print(f"get_int_value called with field={field}")
         if field == Quartz.kCGKeyboardEventKeycode:
             return 6
         return 0
-
     mocker.patch("Quartz.CGEventGetIntegerValueField", side_effect=get_int_value)
     mocker.patch("Quartz.CGEventGetFlags", return_value=0)
 
     mock_call_after = mocker.patch("PyObjCTools.AppHelper.callAfter")
 
-    # Call the callback
-    res = overlay._normal_tap_callback(None, Quartz.kCGEventKeyDown, mock_event, None)
+    overlay._insert_mode = False
+    overlay._launcher.is_visible = MagicMock(return_value=False)
 
+    # Call the callback
+    print(f"DEBUG: Quartz.kCGEventTapDisabledByTimeout={Quartz.kCGEventTapDisabledByTimeout}")
+    res = overlay._normal_tap_callback(None, Quartz.kCGEventKeyDown, mock_event, None)
+    print(f"DEBUG RETURN VALUE: {res}")
+    print(f"DEBUG mock_event: {mock_event}")
     assert res is None
 
     found = False
@@ -88,10 +99,10 @@ def test_type_hint_char_when_hints_visible(overlay, mocker):
 
     # Mock CGEventGetIntegerValueField to return 'z' keycode (6)
     def get_int_value(ev, field):
+        print(f"get_int_value called with field={field}")
         if field == Quartz.kCGKeyboardEventKeycode:
             return 6
         return 0
-
     mocker.patch("Quartz.CGEventGetIntegerValueField", side_effect=get_int_value)
     mocker.patch("Quartz.CGEventGetFlags", return_value=0)
 
@@ -99,8 +110,12 @@ def test_type_hint_char_when_hints_visible(overlay, mocker):
     mock_call_after = mocker.patch("PyObjCTools.AppHelper.callAfter")
     mock_type_char = mocker.patch.object(overlay, "type_char")
 
-    res = overlay._normal_tap_callback(None, Quartz.kCGEventKeyDown, mock_event, None)
+    overlay._insert_mode = False
+    overlay._launcher.is_visible = MagicMock(return_value=False)
 
+    res = overlay._normal_tap_callback(None, Quartz.kCGEventKeyDown, mock_event, None)
+    print(f"DEBUG RETURN VALUE: {res}")
+    print(f"DEBUG mock_event: {mock_event}")
     assert res is None
 
     # Execute callAfter lambdas
@@ -125,6 +140,7 @@ def test_pass_other_keys(overlay, mocker):
     mocker.patch("Quartz.CGEventGetFlags", return_value=0)
 
     res = overlay._normal_tap_callback(None, Quartz.kCGEventKeyDown, mock_event, None)
-
+    print(f"DEBUG RETURN VALUE: {res}")
+    print(f"DEBUG mock_event: {mock_event}")
     # Should return the event (passed through)
     assert res == mock_event

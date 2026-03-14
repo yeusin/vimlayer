@@ -1,35 +1,12 @@
 import sys
-from unittest.mock import MagicMock, patch
-
-# Mock Quartz and other macOS-specific modules
-mock_quartz = MagicMock()
-mock_quartz.kCGEventFlagMaskCommand = 1 << 20
-mock_quartz.kCGEventFlagMaskShift = 1 << 17
-mock_quartz.kCGEventFlagMaskAlternate = 1 << 19
-mock_quartz.kCGEventFlagMaskControl = 1 << 18
-mock_quartz.kCGEventKeyDown = 10
-mock_quartz.kCGSessionEventTap = 0
-mock_quartz.kCGHeadInsertEventTap = 0
-mock_quartz.kCGEventTapOptionDefault = 0
-mock_quartz.kCGKeyboardEventKeycode = 0
-mock_quartz.kCGKeyboardEventAutorepeat = 1
-mock_quartz.kCFRunLoopCommonModes = 0
-
-mock_objc = MagicMock()
-mock_appkit = MagicMock()
-mock_app_services = MagicMock()
-mock_pyobjc_tools = MagicMock()
-mock_foundation = MagicMock()
-mock_core_foundation = MagicMock()
-
-sys.modules["objc"] = mock_objc
-sys.modules["Quartz"] = mock_quartz
-sys.modules["AppKit"] = mock_appkit
-sys.modules["ApplicationServices"] = mock_app_services
-sys.modules["PyObjCTools"] = mock_pyobjc_tools
-sys.modules["PyObjCTools.AppHelper"] = mock_pyobjc_tools.AppHelper
-sys.modules["Foundation"] = mock_foundation
-sys.modules["CoreFoundation"] = mock_core_foundation
+from unittest.mock import MagicMock
+import Quartz as mock_quartz
+import objc as mock_objc
+import AppKit as mock_appkit
+import ApplicationServices as mock_app_services
+import PyObjCTools as mock_pyobjc_tools
+import Foundation as mock_foundation
+import CoreFoundation as mock_core_foundation
 
 import pytest
 from vimlayer.hint_overlay import HintOverlay

@@ -1,5 +1,7 @@
+import sys
+from unittest.mock import MagicMock
 from vimlayer import config
-
+import Quartz
 
 def test_default_keybindings():
     bindings = config.default_keybindings()
@@ -46,3 +48,30 @@ def test_load_keybindings_merge(tmp_path, monkeypatch):
     assert merged["move_left"]["keycode"] == 99
     # Still has other defaults
     assert merged["move_right"]["keycode"] == 37
+
+
+def test_format_hotkey():
+    # 49 is Space
+    assert config.format_hotkey(49, 0, use_symbols=False) == "Space"
+    
+    # Command + Space
+    cmd_flag = Quartz.kCGEventFlagMaskCommand
+    assert config.format_hotkey(49, cmd_flag, use_symbols=False) == "Cmd+Space"
+    assert config.format_hotkey(49, cmd_flag, use_symbols=True) == "\u2318Space"
+    
+    # Command + Shift + Space
+    cmd_shift_flag = Quartz.kCGEventFlagMaskCommand | Quartz.kCGEventFlagMaskShift
+    assert config.format_hotkey(49, cmd_shift_flag, use_symbols=False) == "Shift+Cmd+Space"
+
+
+def test_format_binding():
+    # Simple binding
+    assert config.format_binding({"keycode": 4}, use_symbols=False) == "H"
+    
+    # Binding with modifiers
+    assert config.format_binding({"keycode": 11, "ctrl": True}, use_symbols=False) == "Ctrl+B"
+    assert config.format_binding({"keycode": 11, "ctrl": True}, use_symbols=True) == "\u2303B"
+    
+    # List of bindings
+    specs = [{"keycode": 4}, {"keycode": 38}]
+    assert config.format_binding(specs, use_symbols=False) == "H / J"

@@ -508,6 +508,8 @@ class HintOverlay:
         alt = bool(flags & _ALT_FLAG)
         ctrl = bool(flags & _CTRL_FLAG)
         shift = bool(flags & _SHIFT_FLAG)
+        
+        print(f"DEBUG _normal: code={code} flags={flags} cmd={cmd} alt={alt} type={event_type}")
 
         # 1. Block Escape and reset typing or drag
         if code == _KEY_ESCAPE:
