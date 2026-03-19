@@ -61,9 +61,9 @@ def test_auto_insert_mode_logic(overlay, mocker):
     
     overlay._check_focus_and_auto_insert("mock_element2")
     
-    # Should exit insert mode automatically
-    assert not overlay._insert_mode
-    assert not overlay._auto_insert
+    # Should NOT exit insert mode automatically anymore
+    assert overlay._insert_mode
+    assert overlay._auto_insert
 
 
 def test_auto_insert_disabled(overlay, mocker):

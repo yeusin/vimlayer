@@ -422,14 +422,11 @@ class HintOverlay:
         AppHelper.callLater(0.5, self._poll_focus)
 
     def _check_focus_and_auto_insert(self, element):
-        """Enter insert mode if element is a text field, exit if it was auto-entered."""
+        """Enter insert mode if element is a text field, stay in it until user exits."""
         if not self.window or not self._auto_insert_enabled:
             return
 
         if element is None:
-            if self._insert_mode and self._auto_insert:
-                log.info("Auto-normal: focus lost")
-                self._exit_insert_mode()
             self._last_auto_element = None
             return
 
@@ -445,9 +442,6 @@ class HintOverlay:
                 # If we are in insert mode (manual or auto), update the last seen element
                 self._last_auto_element = element
         else:
-            if self._insert_mode and self._auto_insert:
-                log.info("Auto-normal: focus lost from input")
-                self._exit_insert_mode()
             self._last_auto_element = None
 
     def suspend_tap(self, suspended=True):

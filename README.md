@@ -16,7 +16,7 @@ VimLayer overlays hint labels on clickable elements (buttons, links, text fields
 - **Cmd+key passthrough** — Standard macOS shortcuts (Cmd+W, Cmd+Tab, etc.) work as expected
 - **Launch at Login** — Start automatically via macOS ServiceManagement
 - **Status bar indicator** — Shows current mode (VL:N / VL:I)
-- **Auto-insert mode** — Intelligently switches to Insert mode when a text field is focused and back to Normal mode when focus is lost.
+- **Auto-insert mode** — Automatically switches to Insert mode when a text field is focused. It stays in Insert mode until manually switched back to Normal mode.
 
 ## Installation
 
@@ -50,7 +50,7 @@ VimLayer enters Normal mode immediately on launch. Press **Cmd+Shift+Space** (de
 
 **Insert mode** — All keys pass through to the target app. A brief "INSERT" watermark flashes on screen. Press the hotkey to return to Normal mode.
 
-**Auto-insert mode** — Automatically activates when you focus a text field or text area (like a search bar). It intelligently returns to Normal mode when focus is lost. If you explicitly switch to Normal mode while an input is focused, auto-triggering is suppressed until you switch windows or focus a different element.
+**Auto-insert mode** — Automatically activates when you focus a text field or text area (like a search bar). It stays in Insert mode until manually switched back to Normal mode. If you explicitly switch to Normal mode while an input is focused, auto-triggering is suppressed until you switch windows or focus a different element.
 
 ### Default Keybindings
 

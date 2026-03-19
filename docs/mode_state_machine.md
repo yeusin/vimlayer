@@ -31,7 +31,7 @@ stateDiagram-v2
     }
 
     NORMAL --> INSERT : 'i' / Auto-focus input
-    INSERT --> NORMAL : Escape / Blur input
+    INSERT --> NORMAL : Hotkey (Cmd+Shift+Space)
 
     NORMAL --> DRAG : 'v' (Toggle)
     DRAG --> NORMAL : 'v' (Toggle) / Escape
@@ -57,8 +57,8 @@ stateDiagram-v2
 *   **Behavior**: The event tap is removed, allowing normal typing in the target application.
 
 ### 3. INSERT → NORMAL
-*   **Manual**: Pressing the global hotkey (`Cmd+Shift+Space`) while in INSERT mode returns to NORMAL mode.
-*   **Auto-Exit**: If the focus leaves a text input field (and it was auto-entered), the system returns to NORMAL mode.
+*   **Manual**: Pressing the global hotkey (`Cmd+Shift+Space` by default) returns to NORMAL mode. (There is no longer an automatic exit from Insert mode.)
+
 
 ### 4. Global Window Tiling
 *   **Trigger**: `Cmd+Ctrl` + [Key]
