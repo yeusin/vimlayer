@@ -126,6 +126,15 @@ def _fuzzy_score(query, name):
     return score
 
 
+def _is_domain(query):
+    """Simple check if a query looks like a domain name or URL."""
+    if not query or " " in query or "." not in query:
+        return False
+    # Check if it has a likely TLD (at least 2 chars after the last dot)
+    parts = query.split(".")
+    return len(parts[-1]) >= 2
+
+
 def _scan_apps():
     """Scan for .app bundles and .prefPane items."""
     items = []
@@ -507,7 +516,11 @@ class Launcher:
             self._results = list(self._app_cache)
         else:
             matched = [(name, path) for name, path in self._app_cache if _fuzzy_match(query, name)]
-            web_item = (f"Search Google for \"{query}\"", f"web:{query}")
+            if _is_domain(query):
+                web_label = f"Open \"{query}\""
+            else:
+                web_label = f"Search Google for \"{query}\""
+            web_item = (web_label, f"web:{query}")
             all_options = matched + [web_item]
 
             def sort_key(item):
@@ -569,10 +582,17 @@ class Launcher:
 
         if path.startswith("web:"):
             query = path[4:]
-            import urllib.parse
-
-            search_url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
-            log.info("launcher: searching web for %s", query)
+            if _is_domain(query):
+                # Ensure it has a scheme
+                if "://" not in query:
+                    search_url = f"https://{query}"
+                else:
+                    search_url = query
+                log.info("launcher: opening URL %s", search_url)
+            else:
+                import urllib.parse
+                search_url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
+                log.info("launcher: searching web for %s", query)
             url = NSURL.URLWithString_(search_url)
         else:
             log.info("launcher: opening %s", path)

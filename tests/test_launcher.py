@@ -316,3 +316,40 @@ def test_launcher_selection_memory(mocker, tmp_path):
     # Now Terminal should be #1 for query "a"
     launcher._on_query_changed()
     assert launcher._results[0][0] == "Terminal"
+
+
+def test_launcher_domain_open(mocker):
+    launcher = Launcher()
+    launcher._app_cache = []
+    launcher._row_views = [MagicMock() for _ in range(9)]
+    mock_search_field = MagicMock()
+    launcher._search_field = mock_search_field
+
+    # 1. Domain query
+    mock_search_field.stringValue.return_value = "google.com"
+    launcher._on_query_changed()
+    
+    # Label should be "Open google.com"
+    assert launcher._results[0][0] == 'Open "google.com"'
+    assert launcher._results[0][1] == "web:google.com"
+
+    # 2. Launch domain
+    launcher._selected = 0
+    launcher._window = MagicMock()
+    mock_workspace = mocker.patch("vimlayer.launcher.NSWorkspace.sharedWorkspace")
+    mock_url_class = mocker.patch("vimlayer.launcher.NSURL")
+    
+    launcher._launch_selected()
+    
+    # Verify it opened the URL directly with https://
+    mock_url_class.URLWithString_.assert_called_with("https://google.com")
+    mock_workspace.return_value.openURL_.assert_called()
+
+    # 3. Non-domain query with dots should still be a search if it doesn't look like TLD
+    mock_search_field.stringValue.return_value = "my.query"
+    launcher._on_query_changed()
+    assert launcher._results[0][0] == 'Open "my.query"' # Actually my.query looks like a domain to _is_domain
+    
+    mock_search_field.stringValue.return_value = "query."
+    launcher._on_query_changed()
+    assert launcher._results[0][0] == 'Search Google for "query."'
