@@ -318,6 +318,77 @@ def test_launcher_selection_memory(mocker, tmp_path):
     assert launcher._results[0][0] == "Terminal"
 
 
+def test_launcher_bookmarks(mocker):
+    # Mock Safari bookmarks
+    mock_safari_data = {
+        "Children": [
+            {
+                "WebBookmarkType": "WebBookmarkTypeLeaf",
+                "URIDictionary": {"title": "Apple"},
+                "URLString": "https://apple.com",
+            }
+        ]
+    }
+    mocker.patch("vimlayer.launcher.plistlib.load", return_value=mock_safari_data)
+    
+    # Mock exists to return True for the paths we care about
+    def mock_exists(p):
+        return "Bookmarks.plist" in p or "Chrome/Default/Bookmarks" in p
+    mocker.patch("os.path.exists", side_effect=mock_exists)
+
+    # Mock Chrome bookmarks
+    mock_chrome_data = {
+        "roots": {
+            "bookmark_bar": {
+                "type": "folder",
+                "children": [
+                    {"type": "url", "name": "Google", "url": "https://google.com"}
+                ],
+            }
+        }
+    }
+    mocker.patch("vimlayer.launcher.json.load", return_value=mock_chrome_data)
+    
+    # We need to mock open()
+    mocker.patch("builtins.open", mocker.mock_open())
+    mocker.patch("vimlayer.launcher._scan_apps", return_value=[("Terminal", "/term")])
+
+    launcher = Launcher()
+    mock_win = MagicMock()
+    # Mock UI related things so show() doesn't fail
+    def mock_build():
+        launcher._window = mock_win
+    launcher._build_window = MagicMock(side_effect=mock_build)
+    launcher._update_result_display = MagicMock()
+    launcher._search_field = MagicMock()
+    launcher._search_field.setStringValue_ = MagicMock()
+    
+    launcher.show()
+    
+    # Verify all items are in app_cache
+    names = [item[0] for item in launcher._app_cache]
+    assert "Apple" in names
+    assert "Google" in names
+    assert "Terminal" in names
+    
+    # Check paths
+    apple_path = [item[1] for item in launcher._app_cache if item[0] == "Apple"][0]
+    assert apple_path == "url:https://apple.com"
+    
+    # Test launching a bookmark
+    launcher._results = [("Apple", "url:https://apple.com")]
+    launcher._selected = 0
+    launcher._window = MagicMock()
+    mock_workspace = mocker.patch("vimlayer.launcher.NSWorkspace.sharedWorkspace")
+    mock_url_class = mocker.patch("vimlayer.launcher.NSURL")
+    launcher._search_field.stringValue.return_value = ""
+    
+    launcher._launch_selected()
+    
+    mock_url_class.URLWithString_.assert_called_with("https://apple.com")
+    mock_workspace.return_value.openURL_.assert_called()
+
+
 def test_launcher_domain_open(mocker):
     launcher = Launcher()
     launcher._app_cache = []

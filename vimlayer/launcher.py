@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import plistlib
 
 import objc
 from AppKit import (
@@ -133,6 +134,72 @@ def _is_domain(query):
     # Check if it has a likely TLD (at least 2 chars after the last dot)
     parts = query.split(".")
     return len(parts[-1]) >= 2
+
+
+def _scan_safari_bookmarks():
+    """Read Safari bookmarks from ~/Library/Safari/Bookmarks.plist."""
+    path = os.path.expanduser("~/Library/Safari/Bookmarks.plist")
+    if not os.path.exists(path):
+        return []
+
+    try:
+        with open(path, "rb") as f:
+            data = plistlib.load(f)
+    except Exception as e:
+        log.warning("failed to read safari bookmarks: %s", e)
+        return []
+
+    bookmarks = []
+
+    def extract_bookmarks(node):
+        if node.get("WebBookmarkType") == "WebBookmarkTypeLeaf":
+            title = node.get("URIDictionary", {}).get("title")
+            url = node.get("URLString")
+            if title and url:
+                bookmarks.append((title, f"url:{url}"))
+        elif node.get("WebBookmarkType") == "WebBookmarkTypeFolder":
+            for child in node.get("Children", []):
+                extract_bookmarks(child)
+
+    for child in data.get("Children", []):
+        extract_bookmarks(child)
+    return bookmarks
+
+
+def _scan_chrome_bookmarks():
+    """Read Chrome/Edge/Brave bookmarks from various Library locations."""
+    base = "~/Library/Application Support"
+    configs = [
+        "Google/Chrome/Default/Bookmarks",
+        "Google/Chrome/Profile 1/Bookmarks",
+        "Microsoft Edge/Default/Bookmarks",
+        "BraveSoftware/Brave-Browser/Default/Bookmarks",
+    ]
+    bookmarks = []
+    for rel_path in configs:
+        path = os.path.expanduser(os.path.join(base, rel_path))
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+
+            def extract_bookmarks(node):
+                if node.get("type") == "url":
+                    name = node.get("name")
+                    url = node.get("url")
+                    if name and url:
+                        bookmarks.append((name, f"url:{url}"))
+                elif node.get("type") == "folder":
+                    for child in node.get("children", []):
+                        extract_bookmarks(child)
+
+            if isinstance(data, dict):
+                for root in data.get("roots", {}).values():
+                    extract_bookmarks(root)
+        except Exception as e:
+            log.debug("failed to read bookmarks from %s: %s", path, e)
+    return bookmarks
 
 
 def _scan_apps():
@@ -300,6 +367,8 @@ class _ResultRowView(NSView):
         self._name_label.setStringValue_(name)
         if path.startswith("web:"):
             kind = "Web Search"
+        elif path.startswith("url:"):
+            kind = "Bookmark"
         else:
             kind = "Settings" if path.endswith(".prefPane") else "Application"
 
@@ -366,6 +435,9 @@ class Launcher:
     def show(self):
         if self._app_cache is None:
             self._app_cache = _scan_apps()
+            self._app_cache += _scan_safari_bookmarks()
+            self._app_cache += _scan_chrome_bookmarks()
+            self._app_cache.sort(key=lambda x: x[0].lower())
             log.info("launcher: indexed %d items", len(self._app_cache))
 
         if self._window is None:
@@ -407,8 +479,8 @@ class Launcher:
         """Get app icon for a path, with caching."""
         icon = self._icon_cache.get(path)
         if icon is None:
-            if path.startswith("web:"):
-                # Use default browser icon for web search
+            if path.startswith("web:") or path.startswith("url:"):
+                # Use default browser icon for web search or bookmarks
                 ws = NSWorkspace.sharedWorkspace()
                 search_url = NSURL.URLWithString_("https://google.com")
                 app_url = ws.URLForApplicationToOpenURL_(search_url)
@@ -594,6 +666,10 @@ class Launcher:
                 search_url = f"https://www.google.com/search?q={urllib.parse.quote(query)}"
                 log.info("launcher: searching web for %s", query)
             url = NSURL.URLWithString_(search_url)
+        elif path.startswith("url:"):
+            url_str = path[4:]
+            log.info("launcher: opening bookmark %s", url_str)
+            url = NSURL.URLWithString_(url_str)
         else:
             log.info("launcher: opening %s", path)
             url = NSURL.fileURLWithPath_(path)
