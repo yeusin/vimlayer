@@ -61,6 +61,47 @@ def make_label(text, font_size, bg_color, text_color, draw_bg=True, bold=True):
     return label
 
 
+def ensure_edit_menu():
+    """Ensure a standard Edit menu exists so Cmd+C/V works in text fields."""
+    from AppKit import NSApp, NSMenu, NSMenuItem
+
+    main_menu = NSApp.mainMenu()
+    if not main_menu:
+        main_menu = NSMenu.alloc().init()
+        NSApp.setMainMenu_(main_menu)
+
+    # Check if Edit menu already exists
+    for item in main_menu.itemArray():
+        if item.title() == "Edit":
+            return
+
+    edit_menu_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_("Edit", None, "")
+    edit_menu = NSMenu.alloc().initWithTitle_("Edit")
+
+    # Standard Edit items with their selectors and keys
+    # Note: Using None target allows them to follow the responder chain
+    items = [
+        ("Undo", "undo:", "z"),
+        ("Redo", "redo:", "Z"),
+        (None, None, None),  # Separator
+        ("Cut", "cut:", "x"),
+        ("Copy", "copy:", "c"),
+        ("Paste", "paste:", "v"),
+        ("Delete", "delete:", ""),
+        ("Select All", "selectAll:", "a"),
+    ]
+
+    for title, action, key in items:
+        if title is None:
+            edit_menu.addItem_(NSMenuItem.separatorItem())
+        else:
+            item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(title, action, key)
+            edit_menu.addItem_(item)
+
+    main_menu.addItem_(edit_menu_item)
+    main_menu.setSubmenu_forItem_(edit_menu, edit_menu_item)
+
+
 class RoundedBoxView(NSView):
     """NSView that draws a rounded semi-transparent rectangle."""
 

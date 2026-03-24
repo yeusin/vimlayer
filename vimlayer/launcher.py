@@ -11,11 +11,15 @@ from AppKit import (
     NSBackingStoreBuffered,
     NSBezierPath,
     NSColor,
+    NSEventModifierFlagCommand,
+    NSEventModifierFlagShift,
     NSFont,
     NSFontWeightMedium,
     NSImageView,
     NSMakeRect,
     NSMakeSize,
+    NSPasteboard,
+    NSPasteboardTypeString,
     NSScreen,
     NSTextField,
     NSView,
@@ -252,6 +256,32 @@ class _LauncherWindow(NSWindow):
     def canBecomeMainWindow(self):
         return True
 
+    def performKeyEquivalent_(self, event):
+        # Handle standard Cmd+C, V, X, A even without a formal menu bar
+        if event.modifierFlags() & NSEventModifierFlagCommand:
+            chars = event.charactersIgnoringModifiers().lower()
+            if chars == "c":
+                if NSApp.sendAction_to_from_(b"copy:", None, None):
+                    return True
+            elif chars == "v":
+                if NSApp.sendAction_to_from_(b"paste:", None, None):
+                    return True
+            elif chars == "x":
+                if NSApp.sendAction_to_from_(b"cut:", None, None):
+                    return True
+            elif chars == "a":
+                if NSApp.sendAction_to_from_(b"selectAll:", None, None):
+                    return True
+            elif chars == "z":
+                # Cmd+Z for undo
+                if event.modifierFlags() & NSEventModifierFlagShift:
+                    if NSApp.sendAction_to_from_(b"redo:", None, None):
+                        return True
+                else:
+                    if NSApp.sendAction_to_from_(b"undo:", None, None):
+                        return True
+        return objc.super(_LauncherWindow, self).performKeyEquivalent_(event)
+
 
 class _SearchFieldCell(objc.lookUpClass("NSTextFieldCell")):
     """Text field cell with left padding for the search icon area."""
@@ -369,6 +399,8 @@ class _ResultRowView(NSView):
             kind = "Web Search"
         elif path.startswith("url:"):
             kind = "Bookmark"
+        elif path.startswith("calc:"):
+            kind = "Calculator"
         else:
             kind = "Settings" if path.endswith(".prefPane") else "Application"
 
@@ -479,7 +511,14 @@ class Launcher:
         """Get app icon for a path, with caching."""
         icon = self._icon_cache.get(path)
         if icon is None:
-            if path.startswith("web:") or path.startswith("url:"):
+            if path.startswith("calc:"):
+                ws = NSWorkspace.sharedWorkspace()
+                calc_path = ws.fullPathForApplication_("Calculator")
+                if calc_path:
+                    icon = ws.iconForFile_(calc_path)
+                else:
+                    icon = ws.iconForFileType_("com.apple.calculator")
+            elif path.startswith("web:") or path.startswith("url:"):
                 # Use default browser icon for web search or bookmarks
                 ws = NSWorkspace.sharedWorkspace()
                 search_url = NSURL.URLWithString_("https://google.com")
@@ -586,6 +625,26 @@ class Launcher:
         query = str(self._search_field.stringValue())
         if not query:
             self._results = list(self._app_cache)
+        elif query.startswith("="):
+            # Calculator mode
+            expr = query[1:].strip()
+            if not expr:
+                self._results = [("Calculator", "calc:0")]
+            else:
+                try:
+                    # Basic math evaluation with restricted globals
+                    allowed = {"__builtins__": None}
+                    # Add common math functions if needed, but keeping it "simple" for now
+                    import math
+                    safe_dict = {k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
+                    result = eval(expr, allowed, safe_dict)
+                    # Format result: int if possible, else float
+                    if isinstance(result, float) and result.is_integer():
+                        result = int(result)
+                    res_str = str(result)
+                    self._results = [(f"= {res_str}", f"calc:{res_str}")]
+                except Exception:
+                    self._results = [("Calculator (Error)", "calc:error")]
         else:
             matched = [(name, path) for name, path in self._app_cache if _fuzzy_match(query, name)]
             if _is_domain(query):
@@ -649,8 +708,19 @@ class Launcher:
             return
         name, path = self._results[self._selected]
         query = str(self._search_field.stringValue())
-        self._memory.record(query, path)
+        if not path.startswith("calc:"):
+            self._memory.record(query, path)
         self.dismiss()
+
+        if path.startswith("calc:"):
+            # Result is already formatted after "calc:"
+            result = path[5:]
+            if result != "error":
+                pb = NSPasteboard.generalPasteboard()
+                pb.clearContents()
+                pb.setString_forType_(result, NSPasteboardTypeString)
+                log.info("launcher: copied result %s to clipboard", result)
+            return
 
         if path.startswith("web:"):
             query = path[4:]

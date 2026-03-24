@@ -424,3 +424,53 @@ def test_launcher_domain_open(mocker):
     mock_search_field.stringValue.return_value = "query."
     launcher._on_query_changed()
     assert launcher._results[0][0] == 'Search Google for "query."'
+
+
+def test_launcher_calculator(mocker):
+    launcher = Launcher()
+    launcher._app_cache = []
+    launcher._row_views = [MagicMock() for _ in range(9)]
+    mock_search_field = MagicMock()
+    launcher._search_field = mock_search_field
+
+    # 1. Simple addition
+    mock_search_field.stringValue.return_value = "= 2 + 2"
+    launcher._on_query_changed()
+    assert launcher._results[0][0] == "= 4"
+    assert launcher._results[0][1] == "calc:4"
+
+    # 2. Multiplication and operator precedence
+    mock_search_field.stringValue.return_value = "= 10 * (2 + 3)"
+    launcher._on_query_changed()
+    assert launcher._results[0][0] == "= 50"
+    assert launcher._results[0][1] == "calc:50"
+
+    # 3. Float result
+    mock_search_field.stringValue.return_value = "= 10 / 4"
+    launcher._on_query_changed()
+    assert launcher._results[0][0] == "= 2.5"
+    assert launcher._results[0][1] == "calc:2.5"
+
+    # 4. Math function (if supported)
+    mock_search_field.stringValue.return_value = "= sqrt(16)"
+    launcher._on_query_changed()
+    assert launcher._results[0][0] == "= 4"
+    assert launcher._results[0][1] == "calc:4"
+
+    # 5. Error case
+    mock_search_field.stringValue.return_value = "= invalid"
+    launcher._on_query_changed()
+    assert "Error" in launcher._results[0][0]
+
+    # 6. Test copying to clipboard
+    launcher._results = [("= 42", "calc:42")]
+    launcher._selected = 0
+    launcher._window = MagicMock()
+    
+    mock_pb = mocker.patch("vimlayer.launcher.NSPasteboard.generalPasteboard")
+    mock_pb_instance = mock_pb.return_value
+    
+    launcher._launch_selected()
+    
+    mock_pb_instance.clearContents.assert_called_once()
+    mock_pb_instance.setString_forType_.assert_called_with("42", mocker.ANY)

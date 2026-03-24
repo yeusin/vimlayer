@@ -168,6 +168,9 @@ def main():
     # No Dock icon, no app switcher entry
     app.setActivationPolicy_(2)  # NSApplicationActivationPolicyProhibited
 
+    from vimlayer.ui import ensure_edit_menu
+    ensure_edit_menu()
+
     status_bar_ctrl = StatusBarController.alloc().init()
 
     def on_mode_change(mode):
