@@ -122,6 +122,16 @@ class RoundedBoxView(NSView):
         path.fill()
 
 
+class WatermarkWindow(NSWindow):
+    """Floating borderless window for watermarks."""
+
+    def canBecomeKeyWindow(self):
+        return False
+
+    def canBecomeMainWindow(self):
+        return False
+
+
 class WatermarkManager:
     """Manages a floating watermark window for mode transitions."""
 
@@ -134,7 +144,7 @@ class WatermarkManager:
 
     def _setup_window(self):
         screen = NSScreen.mainScreen().frame()
-        self._window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+        self._window = WatermarkWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             NSMakeRect(0, 0, screen.size.width, screen.size.height),
             0,
             NSBackingStoreBuffered,
@@ -285,6 +295,16 @@ class CheatSheetView(NSView):
         path.fill()
 
 
+class CheatSheetWindow(NSWindow):
+    """Floating window for cheat sheet."""
+
+    def canBecomeKeyWindow(self):
+        return False
+
+    def canBecomeMainWindow(self):
+        return False
+
+
 class CheatSheetOverlay:
     """Manages the visibility of the shortcut cheat sheet."""
 
@@ -313,7 +333,7 @@ class CheatSheetOverlay:
             (screen.size.width - _CS_WIDTH) / 2, (screen.size.height - h) / 2, _CS_WIDTH, h
         )
 
-        self._window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
+        self._window = CheatSheetWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             win_rect, 0, NSBackingStoreBuffered, False
         )
         self._window.setLevel_(NSFloatingWindowLevel + 1)

@@ -4,7 +4,7 @@ import logging
 from typing import Any, Dict, Optional, Tuple
 import ApplicationServices as AX
 import Quartz
-from AppKit import NSScreen
+from AppKit import NSScreen, NSWorkspace
 
 log = logging.getLogger(__name__)
 
@@ -25,18 +25,31 @@ class WindowManager:
             if err == 0 and win:
                 log.debug("Found focused window via focused element")
                 return win
-
-        # Method 2: Fallback to application's focused window
-        err, focused_app = AX.AXUIElementCopyAttributeValue(system, "AXFocusedApplication", None)
-        if err != 0 or not focused_app:
-            log.debug("No focused application found (err=%d)", err)
-            return None
-        err, focused_win = AX.AXUIElementCopyAttributeValue(focused_app, "AXFocusedWindow", None)
-        if err != 0:
-            log.debug("No focused window found for app (err=%d)", err)
         else:
-            log.debug("Found focused window via application")
-        return focused_win if err == 0 else None
+            log.debug("No focused element found (err=%d)", err)
+
+        # Method 2: Fallback to application's focused window (system-wide)
+        err, focused_app = AX.AXUIElementCopyAttributeValue(system, "AXFocusedApplication", None)
+        if err == 0 and focused_app:
+            err, focused_win = AX.AXUIElementCopyAttributeValue(focused_app, "AXFocusedWindow", None)
+            if err == 0 and focused_win:
+                log.debug("Found focused window via system-wide application")
+                return focused_win
+
+        # Method 3: Fallback to NSWorkspace frontmost application (very robust)
+        front_app = NSWorkspace.sharedWorkspace().frontmostApplication()
+        if front_app:
+            pid = front_app.processIdentifier()
+            app_ref = AX.AXUIElementCreateApplication(pid)
+            err, focused_win = AX.AXUIElementCopyAttributeValue(app_ref, "AXFocusedWindow", None)
+            if err == 0 and focused_win:
+                log.debug("Found focused window via NSWorkspace PID %d", pid)
+                return focused_win
+            else:
+                log.debug("NSWorkspace app PID %d has no focused window (err=%d)", pid, err)
+        
+        log.warning("Could not find any focused window via all methods")
+        return None
 
     def _get_visible_rect(self) -> Tuple[float, float, float, float]:
         screens = NSScreen.screens()

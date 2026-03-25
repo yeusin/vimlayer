@@ -201,6 +201,12 @@ class HintWindow(NSWindow):
         self.setHasShadow_(False)
         return self
 
+    def canBecomeKeyWindow(self):
+        return False
+
+    def canBecomeMainWindow(self):
+        return False
+
 
 class HintOverlay:
     def __init__(self, on_mode_change=None):
@@ -503,7 +509,6 @@ class HintOverlay:
         ctrl = bool(flags & _CTRL_FLAG)
         shift = bool(flags & _SHIFT_FLAG)
         
-        print(f"DEBUG _normal: code={code} flags={flags} cmd={cmd} alt={alt} type={event_type}")
 
         # 1. Block Escape and reset typing or drag
         if code == _KEY_ESCAPE:
