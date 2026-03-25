@@ -65,8 +65,10 @@ class HotkeyManager:
         if event_type == Quartz.kCGEventKeyDown:
             keycode = Quartz.CGEventGetIntegerValueField(event, Quartz.kCGKeyboardEventKeycode)
             flags = Quartz.CGEventGetFlags(event) & MODIFIER_MASK
+            log.debug("Hotkey event: keycode=%d flags=%d", keycode, flags)
             callback = self.hotkeys.get((keycode, flags))
             if callback:
+                log.debug("Hotkey matched!")
                 callback()
                 return None  # Suppress the event
         return event

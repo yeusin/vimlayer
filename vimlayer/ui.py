@@ -178,7 +178,7 @@ class WatermarkManager:
         self._box.addSubview_(self._mode_label)
         self._window.contentView().addSubview_(self._box)
 
-    def set_mode(self, text):
+    def set_mode(self, text, timeout=None):
         self._mode_label.setStringValue_(text)
         self._mode_label.sizeToFit()
         f = self._mode_label.frame()
@@ -198,9 +198,9 @@ class WatermarkManager:
         self._box.subviews()[0].setFrameOrigin_(((box_w - vl_f.size.width) / 2, vl_f.origin.y))
         self._mode_label.setFrame_(NSMakeRect((box_w - w) / 2, _WM_BOX_PAD_Y, w, f.size.height))
 
-        self.flash()
+        self.flash(timeout=timeout)
 
-    def flash(self):
+    def flash(self, timeout=None):
         self._flash_gen += 1
         gen = self._flash_gen
         self._box.setHidden_(False)
@@ -213,7 +213,8 @@ class WatermarkManager:
                 if self._on_hide:
                     self._on_hide(self._mode_label.stringValue())
 
-        AppHelper.callLater(_WM_FLASH_DURATION, _hide)
+        duration = timeout if timeout is not None else _WM_FLASH_DURATION
+        AppHelper.callLater(duration, _hide)
 
     def hide(self):
         self._flash_gen += 1

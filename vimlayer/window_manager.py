@@ -17,20 +17,43 @@ class WindowManager:
 
     def _get_focused_window(self) -> Optional[Any]:
         system = AX.AXUIElementCreateSystemWide()
+        
+        # Method 1: Get it from the focused element (most reliable for sub-windows/web-apps)
+        err, focused_el = AX.AXUIElementCopyAttributeValue(system, "AXFocusedUIElement", None)
+        if err == 0 and focused_el:
+            err, win = AX.AXUIElementCopyAttributeValue(focused_el, "AXWindow", None)
+            if err == 0 and win:
+                log.debug("Found focused window via focused element")
+                return win
+
+        # Method 2: Fallback to application's focused window
         err, focused_app = AX.AXUIElementCopyAttributeValue(system, "AXFocusedApplication", None)
         if err != 0 or not focused_app:
+            log.debug("No focused application found (err=%d)", err)
             return None
         err, focused_win = AX.AXUIElementCopyAttributeValue(focused_app, "AXFocusedWindow", None)
+        if err != 0:
+            log.debug("No focused window found for app (err=%d)", err)
+        else:
+            log.debug("Found focused window via application")
         return focused_win if err == 0 else None
 
     def _get_visible_rect(self) -> Tuple[float, float, float, float]:
-        screen = NSScreen.mainScreen()
-        if not screen:
+        screens = NSScreen.screens()
+        if not screens:
             return 0.0, 0.0, 0.0, 0.0
-        full = screen.frame()
-        visible = screen.visibleFrame()
+        
+        primary_screen = screens[0]
+        primary_height = primary_screen.frame().size.height
+        
+        focused_screen = NSScreen.mainScreen() or primary_screen
+        visible = focused_screen.visibleFrame()
+        
         ax_x = visible.origin.x
-        ax_y = full.size.height - visible.origin.y - visible.size.height
+        # Accessibility coordinates are top-down from the primary screen's top.
+        # visible.origin.y is bottom-up from the primary screen's bottom.
+        ax_y = primary_height - (visible.origin.y + visible.size.height)
+        
         return ax_x, ax_y, visible.size.width, visible.size.height
 
     def _get_window_frame(self, win: Any) -> Optional[Tuple[float, float, float, float]]:
@@ -46,8 +69,16 @@ class WindowManager:
         pos = AX.AXValueCreate(AX.kAXValueCGPointType, Quartz.CGPointMake(x, y))
         size = AX.AXValueCreate(AX.kAXValueCGSizeType, Quartz.CGSizeMake(w, h))
         if pos and size:
-            AX.AXUIElementSetAttributeValue(win, "AXPosition", pos)
+            # Set size first, then position, then size again. 
+            # This handles cases where the window can't be at (x, y) with its current size,
+            # or can't be size (w, h) at its current position.
             AX.AXUIElementSetAttributeValue(win, "AXSize", size)
+            err1 = AX.AXUIElementSetAttributeValue(win, "AXPosition", pos)
+            err2 = AX.AXUIElementSetAttributeValue(win, "AXSize", size)
+            if err1 != 0 or err2 != 0:
+                log.warning("Failed to set window frame: pos_err=%d, size_err=%d", err1, err2)
+            else:
+                log.debug("Set window frame to x=%.1f, y=%.1f, w=%.1f, h=%.1f", x, y, w, h)
 
     def tile_window(self, quadrant: int) -> None:
         win = self._get_focused_window()

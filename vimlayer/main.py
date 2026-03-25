@@ -159,7 +159,7 @@ def main():
     logging.basicConfig(
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
-        level=logging.INFO,
+        level=logging.DEBUG,
     )
 
     _ensure_accessibility()
