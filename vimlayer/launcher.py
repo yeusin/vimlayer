@@ -450,12 +450,28 @@ class _SearchFieldDelegate(NSObject):
         return False
 
 
+class _WindowDelegate(NSObject):
+    """Delegate that handles window events like losing focus."""
+
+    def init(self):
+        self = objc.super(_WindowDelegate, self).init()
+        if self is None:
+            return None
+        self._launcher = None
+        return self
+
+    def windowDidResignKey_(self, notification):
+        if self._launcher:
+            self._launcher.dismiss()
+
+
 class Launcher:
     def __init__(self, on_dismiss=None):
         self._on_dismiss = on_dismiss
         self._window = None
         self._search_field = None
         self._search_delegate = None
+        self._win_delegate = None
         self._row_views = []
         self._results = []
         self._selected = 0
@@ -489,11 +505,11 @@ class Launcher:
         self._window.makeFirstResponder_(self._search_field)
 
     def dismiss(self):
-        if self._window:
+        if self._window and self._window.isVisible():
             self._window.orderOut_(None)
-        NSApp.setActivationPolicy_(2)
-        if self._on_dismiss:
-            self._on_dismiss()
+            NSApp.setActivationPolicy_(2)
+            if self._on_dismiss:
+                self._on_dismiss()
 
     def recenter(self):
         """Update window position to be centered on the current main screen."""
@@ -596,6 +612,12 @@ class Launcher:
         sf.setDelegate_(delegate)
         self._search_field = sf
         self._search_delegate = delegate
+
+        # Window delegate
+        win_delegate = _WindowDelegate.alloc().init()
+        win_delegate._launcher = self
+        w.setDelegate_(win_delegate)
+        self._win_delegate = win_delegate
 
         # Result rows
         self._row_views = []

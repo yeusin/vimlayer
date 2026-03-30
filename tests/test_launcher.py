@@ -474,3 +474,31 @@ def test_launcher_calculator(mocker):
     
     mock_pb_instance.clearContents.assert_called_once()
     mock_pb_instance.setString_forType_.assert_called_with("42", mocker.ANY)
+
+
+def test_launcher_dismiss_logic(mocker):
+    launcher = Launcher()
+    launcher._on_dismiss = MagicMock()
+    
+    # Mock window and make it visible
+    mock_window = MagicMock()
+    mock_window.isVisible.return_value = True
+    launcher._window = mock_window
+    
+    # 1. Dismiss when visible
+    launcher.dismiss()
+    
+    # Verify launcher was dismissed
+    mock_window.orderOut_.assert_called_once()
+    launcher._on_dismiss.assert_called_once()
+    
+    # 2. Dismiss again when NOT visible (idempotency)
+    mock_window.orderOut_.reset_mock()
+    launcher._on_dismiss.reset_mock()
+    mock_window.isVisible.return_value = False
+    
+    launcher.dismiss()
+    
+    # Should not call dismiss again if already hidden
+    mock_window.orderOut_.assert_not_called()
+    launcher._on_dismiss.assert_not_called()
