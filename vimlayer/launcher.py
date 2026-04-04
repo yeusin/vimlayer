@@ -133,7 +133,11 @@ def _fuzzy_score(query, name):
 
 def _is_domain(query):
     """Simple check if a query looks like a domain name or URL."""
-    if not query or " " in query or "." not in query:
+    if not query or " " in query:
+        return False
+    if query.startswith(("http://", "https://")):
+        return True
+    if "." not in query:
         return False
     # Check if it has a likely TLD (at least 2 chars after the last dot)
     parts = query.split(".")
