@@ -145,7 +145,7 @@ class WatermarkManager:
     def _setup_window(self):
         screen = NSScreen.mainScreen().frame()
         self._window = WatermarkWindow.alloc().initWithContentRect_styleMask_backing_defer_(
-            NSMakeRect(0, 0, screen.size.width, screen.size.height),
+            screen,
             0,
             NSBackingStoreBuffered,
             False,
@@ -194,8 +194,10 @@ class WatermarkManager:
         f = self._mode_label.frame()
         w = f.size.width + 4
 
-        # Dynamically resize the box to fit new text if it's wider than original content
+        # Update window frame and box position for current main screen
         screen = NSScreen.mainScreen().frame()
+        self._window.setFrame_display_(screen, True)
+
         vl_f = self._box.subviews()[0].frame()  # "VL" label is first subview
         content_w = max(vl_f.size.width, w)
         box_w = content_w + _WM_BOX_PAD_X * 2
@@ -330,7 +332,10 @@ class CheatSheetOverlay:
         h = min(h, screen.size.height - 100)
 
         win_rect = NSMakeRect(
-            (screen.size.width - _CS_WIDTH) / 2, (screen.size.height - h) / 2, _CS_WIDTH, h
+            screen.origin.x + (screen.size.width - _CS_WIDTH) / 2,
+            screen.origin.y + (screen.size.height - h) / 2,
+            _CS_WIDTH,
+            h,
         )
 
         self._window = CheatSheetWindow.alloc().initWithContentRect_styleMask_backing_defer_(

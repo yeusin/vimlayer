@@ -187,7 +187,7 @@ class HintWindow(NSWindow):
     def init(self):
         screen = NSScreen.mainScreen().frame()
         self = objc.super(HintWindow, self).initWithContentRect_styleMask_backing_defer_(
-            NSMakeRect(0, 0, screen.size.width, screen.size.height),
+            screen,
             0,  # borderless
             NSBackingStoreBuffered,
             False,
@@ -773,8 +773,9 @@ class HintOverlay:
         win_positions = []
         for hint, w in win_assignments:
             bounds = w[Quartz.kCGWindowBounds]
-            cx = bounds["X"] + bounds["Width"] / 2
-            cy = bounds["Y"] + bounds["Height"] / 2
+            # Coordinates are absolute; convert to screen-relative for our overlay window
+            cx = (bounds["X"] - screen.origin.x) + bounds["Width"] / 2
+            cy = (bounds["Y"] - screen.origin.y) + bounds["Height"] / 2
             flipped_y = screen.size.height - cy
             win_positions.append((hint, w, cx, flipped_y))
 
@@ -797,7 +798,10 @@ class HintOverlay:
 
         elements.sort(key=lambda el: (_element_position(el)[1], _element_position(el)[0]))
         for hint, el in zip(el_hints, elements):
-            x, y = _element_position(el)
+            ex, ey = _element_position(el)
+            # Coordinates are absolute; convert to screen-relative for our overlay window
+            x = ex - screen.origin.x
+            y = ey - screen.origin.y
             flipped_y = screen.size.height - y
             label = self._create_hint_label(hint, x, flipped_y)
             content.addSubview_(label)
@@ -1153,6 +1157,13 @@ class HintOverlay:
 
     def refresh(self, pid=None, auto_hide_after=None):
         """Re-collect elements and refresh hints. Optionally specify a target PID and auto-hide timer."""
+        if not self.window:
+            return
+
+        # Ensure window is on the correct screen
+        screen = NSScreen.mainScreen().frame()
+        self.window.setFrame_display_(screen, True)
+
         if pid is not None:
             self._pid = pid
         else:
@@ -1195,6 +1206,13 @@ class HintOverlay:
 
     def _refresh_all(self):
         """Collect clickable elements from all visible windows."""
+        if not self.window:
+            return
+
+        # Ensure window is on the correct screen
+        screen = NSScreen.mainScreen().frame()
+        self.window.setFrame_display_(screen, True)
+
         windows = self._get_visible_windows()
         pid_bounds = {}
         for w in windows:
