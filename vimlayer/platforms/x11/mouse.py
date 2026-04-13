@@ -15,11 +15,13 @@ class X11Mouse:
         return float(data.root_x), float(data.root_y)
 
     def move_cursor(self, x: float, y: float, dragging: bool = False) -> None:
+        log.debug("move_cursor: x=%.2f, y=%.2f, dragging=%s", x, y, dragging)
         # detail=0 for absolute motion
         xtest.fake_input(self._display, X.MotionNotify, 0, x=int(x), y=int(y))
         self._display.sync()
 
     def move_relative(self, dx: int, dy: int, repeat: bool = False, dragging: bool = False) -> None:
+        log.debug("move_relative: dx=%d, dy=%d, repeat=%s, dragging=%s", dx, dy, repeat, dragging)
         # Basic relative motion, no acceleration implemented yet
         step = 20 if repeat else 5
         # detail=1 for relative motion
@@ -27,38 +29,45 @@ class X11Mouse:
         self._display.sync()
 
     def click(self, x: float, y: float) -> None:
+        log.info("click: x=%.2f, y=%.2f", x, y)
         self.move_cursor(x, y)
         xtest.fake_input(self._display, X.ButtonPress, 1)
         xtest.fake_input(self._display, X.ButtonRelease, 1)
         self._display.sync()
 
     def right_click(self, x: float, y: float) -> None:
+        log.info("right_click: x=%.2f, y=%.2f", x, y)
         self.move_cursor(x, y)
         xtest.fake_input(self._display, X.ButtonPress, 3)
         xtest.fake_input(self._display, X.ButtonRelease, 3)
         self._display.sync()
 
     def mouse_down(self, x: float, y: float) -> None:
+        log.debug("mouse_down: x=%.2f, y=%.2f", x, y)
         self.move_cursor(x, y)
         xtest.fake_input(self._display, X.ButtonPress, 1)
         self._display.sync()
 
     def mouse_up(self, x: float, y: float) -> None:
+        log.debug("mouse_up: x=%.2f, y=%.2f", x, y)
         self.move_cursor(x, y)
         xtest.fake_input(self._display, X.ButtonRelease, 1)
         self._display.sync()
 
     def back_button(self) -> None:
+        log.info("back_button")
         xtest.fake_input(self._display, X.ButtonPress, 8)
         xtest.fake_input(self._display, X.ButtonRelease, 8)
         self._display.sync()
 
     def forward_button(self) -> None:
+        log.info("forward_button")
         xtest.fake_input(self._display, X.ButtonPress, 9)
         xtest.fake_input(self._display, X.ButtonRelease, 9)
         self._display.sync()
 
     def scroll(self, lines: int) -> None:
+        log.debug("scroll: lines=%d", lines)
         # 4 is scroll up, 5 is scroll down in X11
         button = 4 if lines > 0 else 5
         for _ in range(abs(lines)):

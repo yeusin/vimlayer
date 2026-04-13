@@ -89,6 +89,7 @@ class X11WindowManager(WindowManagerProvider):
 
     def toggle_maximize(self) -> None:
         win = self._get_active_window()
+        log.info("toggle_maximize, active_win=%s", win)
         if not win: return
         # EWMH maximize states are _NET_WM_STATE_MAXIMIZED_VERT and _NET_WM_STATE_MAXIMIZED_HORZ
         self._ewmh.setWmState(win, 2, '_NET_WM_STATE_MAXIMIZED_VERT', '_NET_WM_STATE_MAXIMIZED_HORZ')

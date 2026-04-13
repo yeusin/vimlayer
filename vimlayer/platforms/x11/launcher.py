@@ -211,7 +211,9 @@ class X11Launcher(QWidget):
         inner_layout.addWidget(self.hint_label)
 
     def show_launcher(self):
+        log.info("Showing launcher")
         if self._app_cache is None:
+            log.info("Scanning for applications")
             self._app_cache = _scan_apps()
             
         self._center_on_screen()
@@ -276,9 +278,12 @@ class X11Launcher(QWidget):
 
     def _launch_selected(self):
         row = self.result_list.currentRow()
-        if row < 0 or row >= len(self._results): return
+        if row < 0 or row >= len(self._results): 
+            log.warning("No item selected to launch")
+            return
         
         name, path = self._results[row]
+        log.info("Launching selected item: %s (%s)", name, path)
         query = self.search_input.text()
         self._memory.record(query, path)
         
@@ -289,11 +294,12 @@ class X11Launcher(QWidget):
             cmd = path[4:]
             # Strip potential % arguments from desktop file Exec
             cmd = cmd.split(" %")[0]
-            log.info("launching: %s", cmd)
+            log.info("Executing: %s", cmd)
             subprocess.Popen(cmd.split(), start_new_session=True)
         elif path.startswith("web:"):
             import urllib.parse
             url = f"https://www.google.com/search?q={urllib.parse.quote(path[4:])}"
+            log.info("Opening URL: %s", url)
             subprocess.Popen(["xdg-open", url])
 
     def hideEvent(self, event):

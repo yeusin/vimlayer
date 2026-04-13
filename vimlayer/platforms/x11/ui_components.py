@@ -1,3 +1,4 @@
+import logging
 from PyQt6.QtWidgets import (
     QLabel, QVBoxLayout, QWidget, QApplication, QDialog, QPushButton, 
     QHBoxLayout, QCheckBox, QTabWidget, QScrollArea, QFrame, QGridLayout
@@ -7,6 +8,8 @@ from PyQt6.QtGui import QColor, QFont, QPalette, QKeyEvent
 from Xlib import X
 
 from ... import config
+
+log = logging.getLogger(__name__)
 
 _ACTION_LABELS = {
     "move_left": "Mouse Left",
@@ -280,6 +283,7 @@ class SettingsWindow(QDialog):
         pass
 
     def _save_and_close(self):
+        log.info("Saving settings")
         # Collect values
         self.cfg["keycode"] = self.activation_rec._keycode
         self.cfg["flags"] = self.activation_rec._flags
@@ -303,11 +307,13 @@ class SettingsWindow(QDialog):
         self.cfg["global_tiling_bindings"] = new_tiling
         
         config.save(self.cfg)
+        log.info("Settings saved successfully")
         self.accept()
 
 class Watermark(QWidget):
     def __init__(self, mode="NORMAL"):
         super().__init__()
+        log.debug("Initializing Watermark")
         self.setWindowFlags(
             Qt.WindowType.WindowStaysOnTopHint | 
             Qt.WindowType.FramelessWindowHint | 
@@ -354,11 +360,13 @@ class Watermark(QWidget):
         )
 
     def show_mode(self, mode, timeout=None):
+        log.debug("Watermark.show_mode mode=%s, timeout=%s", mode, timeout)
         self.mode_label.setText(mode)
         self.adjustSize()
         self._center_on_screen()
         self.show()
         
         duration = timeout if timeout is not None else _WM_FLASH_DURATION
+        log.debug("Watermark will hide in %s seconds", duration)
         # Using int(duration * 1000) for milliseconds
         QTimer.singleShot(int(duration * 1000), self.hide)
