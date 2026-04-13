@@ -197,7 +197,11 @@ class MacPlatformProvider(PlatformProvider):
                 status_bar_ctrl._status_item.setTitle_("VL")
             
             # Update watermark
-            self._ui.show_watermark(display_mode, timeout=1.0 if display_mode == "NORMAL" else None)
+            if mode:
+                timeout = 1.0 if display_mode == "NORMAL" else (2.0 if display_mode == "INSERT" else None)
+                self._ui.show_watermark(display_mode, timeout=timeout)
+            else:
+                self._ui.hide_watermark()
 
         overlay = self._ui.create_hint_overlay(on_mode_change=on_mode_change)
         

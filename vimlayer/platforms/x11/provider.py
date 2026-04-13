@@ -239,7 +239,8 @@ class X11PlatformProvider(PlatformProvider):
 
         # Update watermark
         if mode:
-            self._ui.show_watermark(display_mode, timeout=1.0 if display_mode == "NORMAL" else None)
+            timeout = 1.0 if display_mode == "NORMAL" else (2.0 if display_mode == "INSERT" else None)
+            self._ui.show_watermark(display_mode, timeout=timeout)
         else:
             self._ui.hide_watermark()
 
